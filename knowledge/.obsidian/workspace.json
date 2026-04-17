@@ -1,0 +1,193 @@
+{
+  "main": {
+    "id": "5b000e4fdbb62290",
+    "type": "split",
+    "children": [
+      {
+        "id": "7a95e82e03b69378",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "ae8683ac9b322c5c",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "freightcheck_frontend_spec.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "freightcheck_frontend_spec"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "fc2d870c6270a6ad",
+    "type": "split",
+    "children": [
+      {
+        "id": "9ce56ebe345b5896",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "a2b0000e1aed3129",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false
+              },
+              "icon": "lucide-folder-closed",
+              "title": "Files"
+            }
+          },
+          {
+            "id": "24fc026f0e9243e6",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "Search"
+            }
+          },
+          {
+            "id": "1a3190fb4657342c",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {},
+              "icon": "lucide-bookmark",
+              "title": "Bookmarks"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "3c327009534a1a4b",
+    "type": "split",
+    "children": [
+      {
+        "id": "d9d2a79de3591649",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "fd44239fcff63030",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "file": "freightcheck_frontend_spec.md",
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "Backlinks for freightcheck_frontend_spec"
+            }
+          },
+          {
+            "id": "d92a0addb960c82e",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "file": "freightcheck_frontend_spec.md",
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "Outgoing links from freightcheck_frontend_spec"
+            }
+          },
+          {
+            "id": "1eaed9c9883cf3dc",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "Tags"
+            }
+          },
+          {
+            "id": "cc1383a0bcd064c7",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "All properties"
+            }
+          },
+          {
+            "id": "ec056720d9328e16",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "file": "freightcheck_frontend_spec.md",
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "Outline of freightcheck_frontend_spec"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:Open quick switcher": false,
+      "graph:Open graph view": false,
+      "canvas:Create new canvas": false,
+      "daily-notes:Open today's daily note": false,
+      "templates:Insert template": false,
+      "command-palette:Open command palette": false,
+      "bases:Create new base": false
+    }
+  },
+  "active": "ae8683ac9b322c5c",
+  "lastOpenFiles": [
+    "freightcheck_system_design.md",
+    "freightcheck_implementation_rules.md",
+    "freightcheck_frontend_spec.md",
+    "freightcheck_testing_spec.md"
+  ]
+}
