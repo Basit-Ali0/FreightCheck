@@ -17,14 +17,6 @@ agent from implementing the next milestone unless explicitly noted.
       GitHub and push the local `main` branch. Needed to verify the
       `.github/workflows/ci.yml` CI pipeline actually runs green on a PR
       (tracked as Q-001 in `notes/questions.md`).
-- [ ] **M0-2 · Get a Gemini API key.** Create one at
-      https://aistudio.google.com and paste it into `backend/.env` as
-      `GEMINI_API_KEY`. Required from M3 onwards (extraction calls). Not
-      needed for M2 — the upload endpoint is Gemini-free.
-- [ ] **M0-3 · Provision a MongoDB Atlas cluster.** Create the free M0 cluster,
-      allow your IP (or `0.0.0.0/0` for dev), create a database user, and paste
-      the connection string into `backend/.env` as `MONGODB_URI`. Required
-      from M4 onwards (session persistence).
 - [ ] **M0-4 · Confirm Tailwind severity / confidence color hex values.**
       `frontend/tailwind.config.js` currently uses conservative Tailwind
       palette defaults for `severity.{critical,warning,info}` and
@@ -61,13 +53,6 @@ agent from implementing the next milestone unless explicitly noted.
 
 ### From Milestone 3 — Agent Tools & Gemini Wrapper
 
-- [ ] **M3-1 · Run the live Gemini integration test once locally.** With
-      `GEMINI_API_KEY` set in `backend/.env`, run
-      `uv run pytest tests/integration/test_gemini_live.py -m integration -q`
-      from `backend/`. This is the Testing Spec §4.1 DoD check — the wrapper
-      must report non-zero token accounting from a real API round-trip. It is
-      excluded from default CI because it costs real tokens; run it once
-      after M3 lands and again any time `services/gemini.py` changes.
 - [ ] **M3-2 · Confirm Gemini model name & generation settings.** The wrapper
       defaults to `gemini-2.5-flash` with `temperature=0.0` and
       `response_mime_type="application/json"` (matching the Environment Setup
@@ -80,10 +65,24 @@ agent from implementing the next milestone unless explicitly noted.
       on both BoL and Packing List returns `critical_mismatch`. Confirm that
       matches your audit policy before M5 — the LangGraph planner will escalate
       accordingly.
+- [ ] **M3-4 · Decide whether to migrate off `google-generativeai`.** The live
+      Gemini test surfaced a `FutureWarning`: the `google-generativeai` SDK
+      is EOL upstream and the replacement is `google-genai`. Pinning stays as
+      specified in Environment Setup §3.2 for now. Tracked as Q-005 in
+      `notes/questions.md`. Tell me to migrate and I'll swap the client in
+      `backend/src/freightcheck/services/gemini.py` (contained diff).
 
 ---
 
 ## Completed
 
-_Nothing completed yet. When you tell me an item is done, I'll move it here
-with the date and the milestone it closed out._
+- **2026-04-18 · M0-2 · Get a Gemini API key.** Key pasted into
+  `backend/.env`; live Gemini integration test
+  (`tests/integration/test_gemini_live.py`) passed with a 688-token round
+  trip, closing out the M3-1 Testing Spec §4.1 DoD check simultaneously.
+- **2026-04-18 · M0-3 · Provision a MongoDB Atlas cluster.** Connection
+  string pasted into `backend/.env`. Not exercised yet — M4 persistence
+  code will be the first consumer.
+- **2026-04-18 · M3-1 · Run the live Gemini integration test once
+  locally.** `uv run pytest tests/integration/test_gemini_live.py -m
+  integration -v -s` — PASSED, `tokens_used=688`.
