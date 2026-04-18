@@ -19,7 +19,8 @@ agent from implementing the next milestone unless explicitly noted.
       (tracked as Q-001 in `notes/questions.md`).
 - [ ] **M0-2 · Get a Gemini API key.** Create one at
       https://aistudio.google.com and paste it into `backend/.env` as
-      `GEMINI_API_KEY`. Required from M2 onwards (extraction calls).
+      `GEMINI_API_KEY`. Required from M3 onwards (extraction calls). Not
+      needed for M2 — the upload endpoint is Gemini-free.
 - [ ] **M0-3 · Provision a MongoDB Atlas cluster.** Create the free M0 cluster,
       allow your IP (or `0.0.0.0/0` for dev), create a database user, and paste
       the connection string into `backend/.env` as `MONGODB_URI`. Required
@@ -42,6 +43,21 @@ agent from implementing the next milestone unless explicitly noted.
       `UP042` ignore for this file as a result. If you want to modernise, swap
       the three base classes to `enum.StrEnum` and delete the ignore — no
       behavioural change. Not blocking.
+
+### From Milestone 2 — PDF Parsing & Upload Endpoint
+
+- [ ] **M2-1 · Smoke-test `POST /upload` with real PDFs.** The DoD calls for a
+      `curl -F bol=@a.pdf -F invoice=@b.pdf -F packing_list=@c.pdf /upload`
+      check. Automated tests cover this end-to-end with synthetic PDFs
+      generated via PyMuPDF, but a one-time manual run against three real
+      shipping PDFs is worth doing before M5 ships the audit endpoint. From
+      `backend/`: `uv run uvicorn freightcheck.main:app --reload` then
+      `curl -F bol=@path/to/bol.pdf -F invoice=@... -F packing_list=@... \
+      http://localhost:8000/upload`. Expect a 200 with `session_id`,
+      `documents_received`, and non-zero `raw_text_lengths` per doc.
+- [ ] **M2-2 · Decide on `MAX_FILE_SIZE_MB` for production.** Default is 10 MB
+      (Implementation Rules section 2.5). Some BoLs can be larger. Adjust in
+      Render env vars if you see `FileTooLargeError` in production logs.
 
 ---
 
