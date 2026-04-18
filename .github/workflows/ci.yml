@@ -1,6 +1,6 @@
-# CI — Milestone 0 scope: lint + typecheck only.
-# TODO(M2/M3/M6): extend with `pytest backend/tests/unit/` and `npm run test`
-# per Implementation Rules §9.1 once tests exist in later milestones.
+# CI — backend lint/typecheck/pytest + frontend lint/typecheck/build.
+# Live-Gemini / live-Mongo integration tests (marked `@pytest.mark.integration`)
+# are excluded here and run in `eval.yml` on secrets-backed workflows.
 
 name: CI
 
@@ -37,7 +37,10 @@ jobs:
         run: uv run ruff format --check .
 
       - name: Mypy strict
-        run: uv run mypy .
+        run: uv run mypy src/freightcheck
+
+      - name: Pytest (unit + in-process integration)
+        run: uv run pytest tests -m "not integration"
 
   frontend:
     name: Frontend lint + typecheck + build
