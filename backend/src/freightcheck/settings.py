@@ -5,9 +5,10 @@
 directly — all env access flows through `Settings`.
 """
 
-from typing import Literal
+from typing import Annotated, Any, Literal
 
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import field_validator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -21,7 +22,24 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_prefix="", extra="ignore")
 
     # API
-    ALLOWED_ORIGINS: list[str] = ["http://localhost:5173"]
+    ALLOWED_ORIGINS: Annotated[list[str], NoDecode] = ["http://localhost:5173"]
+
+    @field_validator("ALLOWED_ORIGINS", mode="before")
+    @classmethod
+    def _split_allowed_origins(cls, value: Any) -> Any:
+        """Accept CSV in `.env` (`a,b,c`) as well as JSON arrays and Python lists.
+
+        Pydantic-settings v2 parses `list[str]` fields as JSON by default,
+        which breaks the documented `.env` idiom `ALLOWED_ORIGINS=http://…`.
+        """
+        if isinstance(value, str):
+            stripped = value.strip()
+            if not stripped:
+                return []
+            if stripped.startswith("["):
+                return stripped
+            return [item.strip() for item in stripped.split(",") if item.strip()]
+        return value
     MAX_FILE_SIZE_MB: int = 10
 
     # Mongo
