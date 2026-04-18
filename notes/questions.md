@@ -88,6 +88,19 @@ the bottom of the Open section).
 - **Blocking?**: no
 - **Status**: open
 
+### Q-004: ISO 6346 severity — Data Models §5 vs plausible domain intent
+
+- **Raised**: 2026-04-18 during M3
+- **Type**: ambiguity
+- **Context**: Data Models §5 ("Field-level Validation Rules") lists `container_number_format` as severity **warning**, meaning a bad ISO 6346 check digit maps to `minor_mismatch` rather than `critical_mismatch`. In practice an invalid check digit almost always indicates a transcription error on a document that downstream parties (carrier, customs) treat as a hard stop, so "warning" feels low.
+- **Spec references**:
+    - `freightcheck_data_models.md` §5 "Field-level Validation Rules": container_number_format → warning
+    - `freightcheck_data_models.md` §5: "Severity catalogue is the single source of truth for tool-generated results."
+- **What I did**: Followed the spec verbatim — `check_container_number_format` returns `minor_mismatch` on an ISO 6346 check-digit failure. The only escalation path is a missing list on **both** BoL and Packing List, which returns `critical_mismatch` (because with no containers to validate, downstream audit steps collapse). Logged M3-3 in `manual_steps.md` so the severity can be re-examined before M5 (planner) ships.
+- **What I need from a human**: Confirm the `minor_mismatch` mapping stays, or update Data Models §5 to bump `container_number_format` to `critical`. Either is a one-line change.
+- **Blocking?**: no
+- **Status**: open
+
 ### Q-003: Tailwind color hex values not specified
 
 - **Raised**: 2026-04-18 during M0

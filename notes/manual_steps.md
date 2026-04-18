@@ -59,6 +59,28 @@ agent from implementing the next milestone unless explicitly noted.
       (Implementation Rules section 2.5). Some BoLs can be larger. Adjust in
       Render env vars if you see `FileTooLargeError` in production logs.
 
+### From Milestone 3 — Agent Tools & Gemini Wrapper
+
+- [ ] **M3-1 · Run the live Gemini integration test once locally.** With
+      `GEMINI_API_KEY` set in `backend/.env`, run
+      `uv run pytest tests/integration/test_gemini_live.py -m integration -q`
+      from `backend/`. This is the Testing Spec §4.1 DoD check — the wrapper
+      must report non-zero token accounting from a real API round-trip. It is
+      excluded from default CI because it costs real tokens; run it once
+      after M3 lands and again any time `services/gemini.py` changes.
+- [ ] **M3-2 · Confirm Gemini model name & generation settings.** The wrapper
+      defaults to `gemini-2.5-flash` with `temperature=0.0` and
+      `response_mime_type="application/json"` (matching the Environment Setup
+      spec). If you want a different model (`gemini-2.5-pro`, `-flash-lite`,
+      etc.) override `GEMINI_MODEL` in `backend/.env` or pass `model=...`
+      explicitly at call sites.
+- [ ] **M3-3 · Review ISO 6346 tolerance policy.** `check_container_number_format`
+      currently downgrades an invalid check digit to `minor_mismatch` per Data
+      Models §5's warning-only catalogue entry, but a missing container list
+      on both BoL and Packing List returns `critical_mismatch`. Confirm that
+      matches your audit policy before M5 — the LangGraph planner will escalate
+      accordingly.
+
 ---
 
 ## Completed
