@@ -11,53 +11,23 @@ agent from implementing the next milestone unless explicitly noted.
 
 ## Open
 
-### From Milestone 0 — Repository Setup
+_No open manual steps. All M0–M3 items are resolved. New items will land
+here as later milestones surface them._
 
-- [ ] **M0-4 · Confirm Tailwind severity / confidence color hex values.**
-      `frontend/tailwind.config.js` currently uses conservative Tailwind
-      palette defaults for `severity.{critical,warning,info}` and
-      `confidence.{low,medium,high}` because the spec did not fix exact hex
-      values (tracked as Q-003 in `notes/questions.md`). Swap in brand colors
-      whenever convenient before M6 (UI build).
+---
 
-### From Milestone 1 — Schemas & Data Contracts
+## Deferred (post-MVP)
 
-- [ ] **M1-1 · (Optional) Migrate enums to `StrEnum`.** Enums in
-      `backend/src/freightcheck/schemas/audit.py` follow the spec's literal
-      `class X(str, Enum)` pattern. `pyproject.toml` carries a per-file
-      `UP042` ignore for this file as a result. If you want to modernise, swap
-      the three base classes to `enum.StrEnum` and delete the ignore — no
-      behavioural change. Not blocking.
-
-### From Milestone 2 — PDF Parsing & Upload Endpoint
-
-- [ ] **M2-1 · Smoke-test `POST /upload` with real PDFs.** The DoD calls for a
-      `curl -F bol=@a.pdf -F invoice=@b.pdf -F packing_list=@c.pdf /upload`
-      check. Automated tests cover this end-to-end with synthetic PDFs
-      generated via PyMuPDF, but a one-time manual run against three real
-      shipping PDFs is worth doing before M5 ships the audit endpoint. From
-      `backend/`: `uv run uvicorn freightcheck.main:app --reload` then
-      `curl -F bol=@path/to/bol.pdf -F invoice=@... -F packing_list=@... \
-      http://localhost:8000/upload`. Expect a 200 with `session_id`,
-      `documents_received`, and non-zero `raw_text_lengths` per doc.
-- [ ] **M2-2 · Decide on `MAX_FILE_SIZE_MB` for production.** Default is 10 MB
-      (Implementation Rules section 2.5). Some BoLs can be larger. Adjust in
-      Render env vars if you see `FileTooLargeError` in production logs.
-
-### From Milestone 3 — Agent Tools & Gemini Wrapper
-
-- [ ] **M3-3 · Review ISO 6346 tolerance policy.** `check_container_number_format`
-      currently downgrades an invalid check digit to `minor_mismatch` per Data
-      Models §5's warning-only catalogue entry, but a missing container list
-      on both BoL and Packing List returns `critical_mismatch`. Confirm that
-      matches your audit policy before M5 — the LangGraph planner will escalate
-      accordingly.
-- [ ] **M3-4 · Decide whether to migrate off `google-generativeai`.** The live
-      Gemini test surfaced a `FutureWarning`: the `google-generativeai` SDK
-      is EOL upstream and the replacement is `google-genai`. Pinning stays as
-      specified in Environment Setup §3.2 for now. Tracked as Q-005 in
-      `notes/questions.md`. Tell me to migrate and I'll swap the client in
-      `backend/src/freightcheck/services/gemini.py` (contained diff).
+- **M1-1 · Migrate enums to `StrEnum`.** Deferred to post-MVP per the
+  Agent Briefing's "no silent spec drift" rule. If the project ever
+  chooses to modernise, the correct sequence is:
+  1. Update `freightcheck_data_models.md` to use `enum.StrEnum` in every
+     enum declaration.
+  2. Log the change in `notes/questions.md`.
+  3. Swap `class X(str, Enum)` → `class X(StrEnum)` in
+     `backend/src/freightcheck/schemas/audit.py` and delete the
+     `UP042` per-file ignore in `pyproject.toml`.
+  Purely cosmetic; zero behavioural impact. Tracked as Q-006.
 
 ---
 
@@ -88,3 +58,43 @@ agent from implementing the next milestone unless explicitly noted.
   and `response_mime_type="application/json"` for the life of the
   project. `GEMINI_MODEL` in `backend/.env` can still override per
   environment.
+- **2026-04-18 · M0-4 · Confirm Tailwind severity / confidence color
+  hex values.** Decided: keep the agent's picks
+  (severity critical/warning/info = red-600 / amber-600 / sky-600,
+  confidence low/medium/high = red-600 / amber-600 / green-700).
+  `freightcheck_frontend_spec.md §6.1` updated so spec matches code
+  (severity-info: blue-600 → sky-600; confidence-high: green-600 →
+  green-700). Q-003 remains open for the M6 review of the broader
+  palette (severity-passed, status-*, confidence-very-low) that the
+  spec lists but the code hasn't implemented yet.
+- **2026-04-18 · M2-1 · Smoke-test `POST /upload` with real PDFs.**
+  Deferred. M2 DoD is satisfied by the synthetic fixtures in
+  `tests/fixtures/pdfs/`; this curl check is not a milestone gate. Will
+  be done informally after M5 once `/upload → /audit → /sessions/:id`
+  is wired end-to-end. Systematic real-document testing belongs to M7's
+  eval harness.
+- **2026-04-18 · M2-2 · Decide on `MAX_FILE_SIZE_MB` for production.**
+  Decided: keep the default 10 MB. Raise only on an actual user report
+  of `FileTooLargeError`; the value is env-driven so the bump is a
+  one-line Render change, no redeploy.
+- **2026-04-18 · M3-3 · Review ISO 6346 tolerance policy.** Decided:
+  severity `warning`, not `minor_mismatch`. An invalid ISO 6346 check
+  digit is a single-document transcription-typo anomaly, not a
+  cross-document contradiction, and must not dilute the `critical`
+  severity Data Models §5 reserves for inter-document conflicts.
+  `check_container_number_format` was refactored to emit one
+  `ExceptionRecord` per bad container (severity `warning`) rather than
+  a `ValidationResult`. Data Models §5 already records
+  `container_number_format → warning`, so no spec change was needed.
+  Q-004 resolved.
+- **2026-04-18 · M3-4 · Migrate `google-generativeai` → `google-genai`.**
+  Done. `knowledge/freightcheck_implementation_rules.md §2.2` pins
+  `google-genai>=1.0`. `backend/src/freightcheck/services/gemini.py`
+  rewritten to use `google.genai.Client(...)` / `client.aio.models.
+  generate_content(...)` / `google.genai.types.GenerateContentConfig`.
+  Error-mapping layer switched to `errors.APIError.code` with
+  `_RETRYABLE_STATUS_CODES` (429 / 5xx) driving retry. Unit tests
+  (114 passed, zero changes needed — they only touch `_raw_gemini_call`
+  via monkeypatch). Live integration test passed at commit `f5df377`
+  with no `FutureWarning` this time. Installed version:
+  `google-genai==1.73.1`. Q-005 resolved.

@@ -61,31 +61,6 @@ the bottom of the Open section).
 
 ## Open
 
-### Q-004: ISO 6346 severity — Data Models §5 vs plausible domain intent
-
-- **Raised**: 2026-04-18 during M3
-- **Type**: ambiguity
-- **Context**: Data Models §5 ("Field-level Validation Rules") lists `container_number_format` as severity **warning**, meaning a bad ISO 6346 check digit maps to `minor_mismatch` rather than `critical_mismatch`. In practice an invalid check digit almost always indicates a transcription error on a document that downstream parties (carrier, customs) treat as a hard stop, so "warning" feels low.
-- **Spec references**:
-  - `freightcheck_data_models.md` §5 "Field-level Validation Rules": container_number_format → warning
-  - `freightcheck_data_models.md` §5: "Severity catalogue is the single source of truth for tool-generated results."
-- **What I did**: Followed the spec verbatim — `check_container_number_format` returns `minor_mismatch` on an ISO 6346 check-digit failure. The only escalation path is a missing list on **both** BoL and Packing List, which returns `critical_mismatch` (because with no containers to validate, downstream audit steps collapse). Logged M3-3 in `manual_steps.md` so the severity can be re-examined before M5 (planner) ships.
-- **What I need from a human**: Confirm the `minor_mismatch` mapping stays, or update Data Models §5 to bump `container_number_format` to `critical`. Either is a one-line change.
-- **Blocking?**: no
-- **Status**: open
-
-### Q-005: `google-generativeai` SDK is deprecated; should we migrate to `google-genai`?
-
-- **Raised**: 2026-04-18 during M3 live test
-- **Type**: possible-error
-- **Context**: Running the M3-1 live integration test emitted a `FutureWarning`: "All support for the `google.generativeai` package has ended. It will no longer be receiving updates or bug fixes. Please switch to the `google.genai` package as soon as possible." Environment Setup §3.2 pins `google-generativeai`, which matches the behaviour we use today but is EOL upstream.
-- **Spec references**:
-  - `freightcheck_environment_setup.md` §3.2: `google-generativeai = "^0.8.3"`
-- **What I did**: Kept `google-generativeai` to stay faithful to the Environment Setup spec; the live test passes (688 tokens round-tripped). The wrapper in `services/gemini.py` is small (one lazy import, `GenerativeModel.generate_content_async`) so a migration to `google-genai` would be a contained diff — new client, `client.aio.models.generate_content(...)`, and different usage-metadata accessor.
-- **What I need from a human**: Confirm whether to (a) stay on `google-generativeai` for the life of this project, (b) migrate to `google-genai` now before the planner lands in M4, or (c) migrate later (deferred, accept the FutureWarning in CI output).
-- **Blocking?**: no
-- **Status**: open
-
 ### Q-003: Tailwind color hex values not specified
 
 - **Raised**: 2026-04-18 during M0
@@ -101,6 +76,48 @@ the bottom of the Open section).
 ---
 
 ## Resolved
+
+### Q-004: ISO 6346 severity — Data Models §5 vs plausible domain intent
+
+- **Raised**: 2026-04-18 during M3
+- **Type**: ambiguity
+- **Context**: Data Models §5 ("Field-level Validation Rules") lists `container_number_format` as severity **warning**. The concern was whether `check_container_number_format` should instead return `minor_mismatch` on a bad ISO 6346 check digit, or escalate to `critical_mismatch`, because in practice downstream parties (carrier, customs) treat an invalid container number as a hard stop.
+- **Spec references**:
+  - `freightcheck_data_models.md` §5 "Field-level Validation Rules": container_number_format → warning
+  - `freightcheck_data_models.md` §5: "Severity catalogue is the single source of truth for tool-generated results."
+- **What I did**: Initially emitted a `ValidationResult` with `minor_mismatch`. That conflated two axes — `ValidationResult.status` (match / minor / critical) describes a field-comparison outcome across two documents, whereas `ExceptionRecord.severity` (critical / warning / info) is what the user sees on the report. `check_container_number_format` is a single-document sanity check, not a comparison, so it belongs on the `ExceptionRecord` axis.
+- **What I need from a human**: N/A — resolved below.
+- **Blocking?**: no
+- **Status**: resolved
+- **Resolution**: Refactored `check_container_number_format` to emit one `ExceptionRecord` per bad container with `severity = ExceptionSeverity.WARNING`. Rationale: a bad ISO 6346 check digit is almost always a transcription typo, not cross-document conflict, and `critical` must stay reserved for inter-document contradictions (CIF vs FOB, different container sets, quantity mismatches) so it doesn't lose its meaning. Data Models §5 already records `container_number_format → warning` so no spec change was needed. Commit `10c9475`. Decided by Basit on 2026-04-18.
+
+### Q-005: `google-generativeai` SDK is deprecated; should we migrate to `google-genai`?
+
+- **Raised**: 2026-04-18 during M3 live test
+- **Type**: possible-error
+- **Context**: Running the M3-1 live integration test emitted a `FutureWarning`: "All support for the `google.generativeai` package has ended. It will no longer be receiving updates or bug fixes. Please switch to the `google.genai` package as soon as possible." Environment Setup §3.2 originally pinned `google-generativeai`.
+- **Spec references**:
+  - `freightcheck_environment_setup.md` §3.2 (pre-migration): `google-generativeai = "^0.8.3"`
+  - `freightcheck_implementation_rules.md` §2.2 (post-migration): `google-genai>=1.0`
+- **What I did**: N/A — resolved immediately; see resolution.
+- **What I need from a human**: N/A.
+- **Blocking?**: no
+- **Status**: resolved
+- **Resolution**: Migrated in M3 before the planner milestone lands. Only one file touches the SDK (`backend/src/freightcheck/services/gemini.py`) so the diff is contained and every downstream milestone (M4 agent, M7 eval, M8 deploy) consumes the new wrapper from day one — cheaper than migrating later and re-running the eval harness. Implementation Rules §2.2 pin switched to `google-genai>=1.0` (commit `f7e9431`, doc-only). Wrapper rewritten to use `google.genai.Client(...)` / `client.aio.models.generate_content(...)` / `google.genai.types.GenerateContentConfig` with `errors.APIError.code` driving retry (429 / 5xx via a frozen `_RETRYABLE_STATUS_CODES` set). Committed atomically as `f5df377`. Unit tests (114) untouched — they only stub `_raw_gemini_call`. Live integration test passed with no `FutureWarning`. Installed version: `google-genai==1.73.1`. Decided by Basit on 2026-04-18.
+
+### Q-006: Enum pattern — `class X(str, Enum)` vs `StrEnum`
+
+- **Raised**: 2026-04-18 during M1
+- **Type**: deferred
+- **Context**: Python 3.11+ offers `enum.StrEnum`, which is marginally cleaner than the spec's `class X(str, Enum)` pattern in `freightcheck_data_models.md`. Ruff's `UP042` flagged the schema file for it, so the backend `pyproject.toml` carries a per-file `UP042` ignore to keep the code literally matching the spec.
+- **Spec references**:
+  - `freightcheck_data_models.md` (every enum declaration): `class SessionStatus(str, Enum):`, `class DocumentType(str, Enum):`, `class ValidationStatus(str, Enum):`, `class ExceptionSeverity(str, Enum):`
+  - `freightcheck_agent_briefing.md` "no silent spec drift" rule
+- **What I did**: Kept the spec's literal pattern. Agent Briefing forbids silently "improving" the spec.
+- **What I need from a human**: No action. Purely cosmetic; zero behavioural impact.
+- **Blocking?**: no
+- **Status**: deferred (post-MVP, possibly never)
+- **Resolution**: Deferred. If migration is ever done, the sequence is: (1) update Data Models spec to `StrEnum` across all enum declarations, (2) log the spec change here, (3) swap the three base classes in `backend/src/freightcheck/schemas/audit.py` and delete the `UP042` ignore in `pyproject.toml`. Tracked in `notes/manual_steps.md` under "Deferred". Decided by Basit on 2026-04-18.
 
 ### Q-001: "CI passes on empty PR" cannot be verified locally
 
