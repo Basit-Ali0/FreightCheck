@@ -346,9 +346,9 @@ Defined in `tailwind.config.js`:
 |---|---|---|
 | `severity-critical` | Critical badges, banners | `#dc2626` (red-600) |
 | `severity-warning` | Warning badges | `#d97706` (amber-600) |
-| `severity-info` | Info badges | `#2563eb` (blue-600) |
+| `severity-info` | Info badges | `#0284c7` (sky-600) |
 | `severity-passed` | Passed validations | `#16a34a` (green-600) |
-| `confidence-high` | Confidence ≥ 0.9 | `#16a34a` (green-600) |
+| `confidence-high` | Confidence ≥ 0.9 | `#15803d` (green-700) |
 | `confidence-medium` | Confidence 0.7–0.89 | `#d97706` (amber-600) |
 | `confidence-low` | Confidence 0.5–0.69 | `#ea580c` (orange-600) |
 | `confidence-very-low` | Confidence < 0.5 | `#dc2626` (red-600) |
