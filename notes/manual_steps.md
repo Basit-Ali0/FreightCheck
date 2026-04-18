@@ -98,3 +98,16 @@ here as later milestones surface them._
   via monkeypatch). Live integration test passed at commit `f5df377`
   with no `FutureWarning` this time. Installed version:
   `google-genai==1.73.1`. Q-005 resolved.
+- **2026-04-19 · M4 · LangGraph agent (graph + checkpoint mirror).**
+  Implemented `build_graph()` / `make_initial_state()` per LangGraph
+  Flow Spec: nodes `extract_all`, `plan_validations`, `execute_tool`,
+  `reflect`, `compile_report`; conditional routing from `reflect`;
+  `AgentState` reducers in `agent/state.py`; tool dispatcher in
+  `agent/dispatcher.py`; `MongoMirroringSaver` (in-memory LangGraph
+  checkpoints + optional sync Mongo callback) in
+  `agent/checkpointing.py`. Extraction response schemas in
+  `schemas/documents.py`; planner output schema in `schemas/planner.py`.
+  Integration tests in `tests/integration/test_agent_graph.py` (mocked
+  Gemini): happy path, iteration cap, low-confidence `awaiting_review`,
+  unknown-tool injection, checkpoint write count. No new human-only
+  steps for M4 — M5 will wire `POST /audit` and real Mongo persistence.

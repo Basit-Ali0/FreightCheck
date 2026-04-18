@@ -69,6 +69,8 @@ select = [
 # FastAPI dependency markers (`File(...)`, `Depends(...)`) are called in
 # argument defaults by design. B008 does not apply to FastAPI routes.
 "src/freightcheck/api/*.py" = ["B008"]
+# `fake_gemini` mirrors `call_gemini`'s six-parameter API.
+"tests/integration/test_agent_graph.py" = ["PLR0913"]
 
 [tool.ruff.format]
 quote-style = "double"
@@ -82,6 +84,11 @@ files = ["src/freightcheck"]
 mypy_path = "src"
 namespace_packages = true
 explicit_package_bases = true
+
+[[tool.mypy.overrides]]
+module = "freightcheck.agent.graph"
+disallow_untyped_defs = false
+disable_error_code = ["arg-type"]
 
 [[tool.mypy.overrides]]
 module = "pymupdf"

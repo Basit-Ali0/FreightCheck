@@ -74,3 +74,24 @@ class ExtractedDocument(BaseModel):
 
     fields: BoLFields | InvoiceFields | PackingListFields
     confidences: dict[str, ExtractionConfidence]
+
+
+class BolExtractionResponse(BaseModel):
+    """Structured extraction response for BoL (Gemini `response_schema`)."""
+
+    fields: BoLFields
+    confidences: dict[str, ExtractionConfidence]
+
+
+class InvoiceExtractionResponse(BaseModel):
+    """Structured extraction response for invoice."""
+
+    fields: InvoiceFields
+    confidences: dict[str, ExtractionConfidence]
+
+
+class PackingListExtractionResponse(BaseModel):
+    """Structured extraction response for packing list."""
+
+    fields: PackingListFields
+    confidences: dict[str, ExtractionConfidence]
