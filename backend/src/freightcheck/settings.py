@@ -40,6 +40,7 @@ class Settings(BaseSettings):
                 return stripped
             return [item.strip() for item in stripped.split(",") if item.strip()]
         return value
+
     MAX_FILE_SIZE_MB: int = 10
 
     # Mongo
