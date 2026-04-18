@@ -66,6 +66,9 @@ select = [
 # rather than `StrEnum`. Keep the spec's pattern verbatim per Implementation
 # Rules §10.
 "src/freightcheck/schemas/audit.py" = ["UP042"]
+# FastAPI dependency markers (`File(...)`, `Depends(...)`) are called in
+# argument defaults by design. B008 does not apply to FastAPI routes.
+"src/freightcheck/api/*.py" = ["B008"]
 
 [tool.ruff.format]
 quote-style = "double"
@@ -80,10 +83,18 @@ mypy_path = "src"
 namespace_packages = true
 explicit_package_bases = true
 
+[[tool.mypy.overrides]]
+module = "pymupdf"
+ignore_missing_imports = true
+disallow_untyped_calls = false
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
 addopts = "-ra"
+markers = [
+    "integration: tests that require live external services (Gemini, MongoDB). Excluded from default CI.",
+]
 
 [tool.coverage.run]
 source = ["src/freightcheck"]
