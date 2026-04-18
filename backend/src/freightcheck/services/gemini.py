@@ -71,13 +71,19 @@ def _exception_for_prompt(prompt_name: str) -> type[FreightCheckError]:
     return ExtractionError
 
 
+# HTTP status codes the wrapper treats as retryable network failures.
+# 429 → rate-limit / quota; 5xx → transient service-side failures. Any other
+# 4xx (auth, bad request, etc.) is non-retryable and surfaces as GeminiAPIError.
+_RETRYABLE_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
+
+
 async def _raw_gemini_call(
     prompt: str,
     response_schema: type[BaseModel],
     tools: list[Any] | None = None,
     system_instruction: str = prompts.SYSTEM_INSTRUCTION,
 ) -> tuple[str, int]:
-    """Execute a single Gemini generation request.
+    """Execute a single Gemini generation request via the `google-genai` SDK.
 
     Returns
     -------
@@ -105,50 +111,47 @@ async def _raw_gemini_call(
         )
 
     try:
-        import google.generativeai as genai  # noqa: PLC0415 - lazy import keeps tests Gemini-free
-        from google.api_core import exceptions as google_exc  # noqa: PLC0415
+        # Lazy imports keep the unit-test surface SDK-free; see module docstring.
+        from google import genai  # noqa: PLC0415
+        from google.genai import errors as genai_errors  # noqa: PLC0415
+        from google.genai import types as genai_types  # noqa: PLC0415
     except ImportError as exc:
         raise GeminiAPIError(
-            f"GeminiAPIError: google-generativeai SDK not installed: {exc}",
+            f"GeminiAPIError: google-genai SDK not installed: {exc}",
         ) from exc
 
-    genai.configure(api_key=settings.GEMINI_API_KEY)  # type: ignore[attr-defined]
-    model = genai.GenerativeModel(  # type: ignore[attr-defined]
-        settings.GEMINI_MODEL,
+    client = genai.Client(api_key=settings.GEMINI_API_KEY)
+
+    config = genai_types.GenerateContentConfig(
         system_instruction=system_instruction,
+        response_mime_type="application/json",
+        response_schema=response_schema,
+        temperature=0.0,
+        tools=tools if tools else None,
     )
 
-    generation_config: dict[str, Any] = {
-        "response_mime_type": "application/json",
-        "response_schema": response_schema,
-    }
-
     try:
-        if tools:
-            response = await model.generate_content_async(
-                prompt,
-                generation_config=generation_config,  # type: ignore[arg-type]
-                tools=tools,
-            )
-        else:
-            response = await model.generate_content_async(
-                prompt,
-                generation_config=generation_config,  # type: ignore[arg-type]
-            )
-    except google_exc.ResourceExhausted as exc:  # 429
+        response = await client.aio.models.generate_content(
+            model=settings.GEMINI_MODEL,
+            contents=prompt,
+            config=config,
+        )
+    except genai_errors.ServerError as exc:  # 5xx
         raise RetryableGeminiError(str(exc)) from exc
-    except google_exc.DeadlineExceeded as exc:  # timeout
-        raise RetryableGeminiError(str(exc)) from exc
-    except google_exc.ServiceUnavailable as exc:  # 5xx
-        raise RetryableGeminiError(str(exc)) from exc
-    except google_exc.InternalServerError as exc:  # 5xx
-        raise RetryableGeminiError(str(exc)) from exc
-    except google_exc.GoogleAPIError as exc:  # catch-all for 4xx / auth
+    except genai_errors.ClientError as exc:  # 4xx
+        if exc.code in _RETRYABLE_STATUS_CODES:  # 429
+            raise RetryableGeminiError(str(exc)) from exc
         raise GeminiAPIError(f"GeminiAPIError: {exc}") from exc
+    except genai_errors.APIError as exc:  # catch-all (unknown code, etc.)
+        if exc.code in _RETRYABLE_STATUS_CODES:
+            raise RetryableGeminiError(str(exc)) from exc
+        raise GeminiAPIError(f"GeminiAPIError: {exc}") from exc
+    except TimeoutError as exc:  # asyncio.wait_for timeouts etc.
+        raise RetryableGeminiError(f"Gemini request timed out: {exc}") from exc
 
     usage = getattr(response, "usage_metadata", None)
     tokens_used = int(getattr(usage, "total_token_count", 0) or 0)
-    text: str = response.text if hasattr(response, "text") else ""
+    text: str = response.text or "" if hasattr(response, "text") else ""
     return text, tokens_used
 
 
