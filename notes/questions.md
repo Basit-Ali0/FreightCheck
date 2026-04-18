@@ -62,6 +62,44 @@ the bottom of the Open section).
 
 <!-- New entries go here. Move to "Resolved" when a human answers. -->
 
+### Q-001: "CI passes on empty PR" cannot be verified locally
+
+- **Raised**: 2026-04-18 during M0
+- **Type**: environment
+- **Context**: M0 DoD (Agent Briefing §Milestone 0) includes the item "CI passes on an empty PR". This requires a GitHub remote with Actions enabled. The local repo was `git init`'d with no remote per user instruction, so this DoD item cannot be verified by the agent.
+- **Spec references**:
+    - `freightcheck_agent_briefing.md` §"Milestone 0 → Definition of Done": "CI passes on an empty PR"
+- **What I did**: Wrote `.github/workflows/ci.yml` with three jobs (backend lint, backend typecheck, frontend lint+typecheck+build), verified each command succeeds locally, and left a `TODO(M2/M3/M6)` comment pointing at Implementation Rules §9.1 for the test-runner extensions added in later milestones. Marked this DoD item as deferred rather than green.
+- **What I need from a human**: Create the GitHub remote, push `main`, open an empty PR, and confirm `ci.yml` passes. Report back whether either job needs adjustment for the hosted runner (e.g. uv cache, Node version mismatch).
+- **Blocking?**: no — every other M0 DoD item is verified locally; this item is purely a remote-side check.
+- **Status**: open
+
+### Q-002: README scope — M0 minimal vs M7 "full" vs M8 deploy
+
+- **Raised**: 2026-04-18 during M0
+- **Type**: ambiguity
+- **Context**: Agent Briefing §"Milestone 0 → Build" says the repo skeleton includes `README.md` "(minimal — full README comes in Milestone 7)", but M7 is the Evaluation Harness milestone and the README requirements (deployed URL, demo GIF, caught-discrepancy example) appear only in M8's DoD. These three references don't line up.
+- **Spec references**:
+    - `freightcheck_agent_briefing.md` §"Milestone 0 → Build": "`README.md` (minimal — full README comes in Milestone 7)"
+    - `freightcheck_agent_briefing.md` §"Milestone 7 → Build": no README items listed
+    - `freightcheck_agent_briefing.md` §"Milestone 8 → Definition of Done": "README contains: deployed URL, 15-second GIF or screenshot, one concrete example..."
+- **What I did**: Wrote a minimal M0 README per the explicit M0 wording (project name, 1-line description, pointer to `knowledge/freightcheck_prd.md` and `knowledge/freightcheck_environment_setup.md`). Will expand it in M8 per the M8 DoD. The "full README comes in Milestone 7" line in the M0 briefing appears to be a spec error — following M8 as the authoritative README milestone.
+- **What I need from a human**: Confirm the README should be expanded in M8 (not M7). If that's correct, consider correcting the M0 briefing parenthetical to say "Milestone 8".
+- **Blocking?**: no
+- **Status**: open
+
+### Q-003: Tailwind color hex values not specified
+
+- **Raised**: 2026-04-18 during M0
+- **Type**: gap
+- **Context**: Implementation Rules §4.5 requires Tailwind color tokens `severity-critical`, `severity-warning`, `severity-info`, `confidence-low`, `confidence-medium`, `confidence-high`, but gives no hex values. Frontend Spec will likely specify them in M6.
+- **Spec references**:
+    - `freightcheck_implementation_rules.md` §4.5: "Colour palette defined in `tailwind.config.js` with named tokens: `severity-critical`, `severity-warning`, `severity-info`, `confidence-low`, `confidence-medium`, `confidence-high`."
+- **What I did**: Picked conservative defaults in `frontend/tailwind.config.js` (red-600 / amber-600 / sky-600 / green-700). These are placeholders; the design token values should be confirmed against the Frontend Spec color specification in M6 before building components.
+- **What I need from a human**: No immediate action. Flag for M6 design review.
+- **Blocking?**: no
+- **Status**: open
+
 ---
 
 ## Resolved
