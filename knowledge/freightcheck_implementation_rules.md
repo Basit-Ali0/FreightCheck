@@ -171,7 +171,7 @@ dependencies = [
     "pymongo>=4.10",
     "motor>=3.6",                      # async Mongo driver
     "pymupdf>=1.24",
-    "google-generativeai>=0.8",
+    "google-genai>=1.0",
     "langgraph>=0.2",
     "langchain-core>=0.3",
     "structlog>=24.4",
@@ -474,7 +474,7 @@ No other env vars in MVP. No secrets in the frontend — ever.
 
 The following are the only third-party dependencies allowed in MVP. Adding a new one requires updating this document first.
 
-**Backend**: FastAPI, Uvicorn, Pydantic, pydantic-settings, PyMongo, Motor, PyMuPDF, google-generativeai, LangGraph, LangChain core, structlog, python-multipart. Dev: pytest, pytest-asyncio, pytest-cov, ruff, mypy, httpx, respx.
+**Backend**: FastAPI, Uvicorn, Pydantic, pydantic-settings, PyMongo, Motor, PyMuPDF, google-genai, LangGraph, LangChain core, structlog, python-multipart. Dev: pytest, pytest-asyncio, pytest-cov, ruff, mypy, httpx, respx.
 
 **Frontend**: React, React DOM, React Router, Tailwind CSS, Zustand. Dev: Vite, TypeScript, Vitest, React Testing Library, ESLint plus standard plugins, Prettier.
 
