@@ -28,7 +28,7 @@ from freightcheck.agent.tools import (
     validate_field_semantic,
 )
 from freightcheck.errors import ExtractionError, ToolArgsValidationError
-from freightcheck.schemas.audit import ValidationStatus
+from freightcheck.schemas.audit import ExceptionSeverity, ValidationStatus
 from tests.fixtures.container_numbers import (
     INVALID_CHECK_DIGIT,
     INVALID_FORMAT,
@@ -310,25 +310,69 @@ def test_check_container_number_format_all_valid() -> None:
         },
     )
     result = check_container_number_format(ctx)
-    assert result["status"] == ValidationStatus.MATCH.value
+    assert result["ok"] is True
+    assert result["checked"] == 2
+    assert result["skipped"] is False
+    assert result["created_exceptions"] == []
+    assert ctx.exceptions == []
 
 
-def test_check_container_number_format_flags_invalid() -> None:
+def test_check_container_number_format_flags_invalid_emits_warning_exception() -> None:
+    # MSCU1234567 fails the ISO 6346 check-digit; MSCU1234566 is the valid
+    # variant. The tool must surface a `warning` ExceptionRecord — not a
+    # ValidationResult with `minor_mismatch` — per Data Models §5 because
+    # this is a single-document sanity check, not a cross-document
+    # comparison (decided 2026-04-18 when Q-004 was resolved).
     ctx = _make_ctx(
         extracted={
-            "bol": {"container_numbers": ["MSCU1234566", "MSCU1234567"]},  # one bad
+            "bol": {"container_numbers": ["MSCU1234566", "MSCU1234567"]},
             "packing_list": {"container_numbers": ["MSCU1234566"]},
         },
     )
     result = check_container_number_format(ctx)
-    assert result["status"] == ValidationStatus.MINOR_MISMATCH.value
-    assert "MSCU1234567" in result["reason"]
+
+    assert result["ok"] is False
+    assert result["checked"] == 3
+    assert len(result["created_exceptions"]) == 1
+    assert ctx.exceptions == result["created_exceptions"]
+
+    record = ctx.exceptions[0]
+    assert record["severity"] == ExceptionSeverity.WARNING.value
+    assert record["field"] == "container_number_format"
+    assert "MSCU1234567" in record["description"]
+    assert record["evidence"]["doc_a"] == "bol"
+    assert record["evidence"]["val_a"] == "MSCU1234567"
+    assert record["evidence"]["doc_b"] == "iso_6346_spec"
+    assert "check digit" in record["evidence"]["val_b"] or "mod-11" in record["evidence"]["val_b"]
+    assert record["exception_id"]
 
 
-def test_check_container_number_format_no_containers() -> None:
+def test_check_container_number_format_flags_each_invalid_separately() -> None:
+    ctx = _make_ctx(
+        extracted={
+            "bol": {"container_numbers": ["MSCU1234567"]},
+            "packing_list": {"container_numbers": ["MSCU1234568"]},
+        },
+    )
+    result = check_container_number_format(ctx)
+    assert result["ok"] is False
+    assert len(result["created_exceptions"]) == 2
+    sources = {e["evidence"]["doc_a"] for e in ctx.exceptions}
+    assert sources == {"bol", "packing_list"}
+    severities = {e["severity"] for e in ctx.exceptions}
+    assert severities == {ExceptionSeverity.WARNING.value}
+
+
+def test_check_container_number_format_no_containers_is_skip_no_exception() -> None:
+    # Precondition failure: the tool can't run, but this is not itself a
+    # finding. The planner decides whether to `escalate_to_human_review`.
     ctx = _make_ctx(extracted={"bol": {}, "packing_list": {}})
     result = check_container_number_format(ctx)
-    assert result["status"] == ValidationStatus.CRITICAL_MISMATCH.value
+    assert result["ok"] is True
+    assert result["checked"] == 0
+    assert result["skipped"] is True
+    assert result["created_exceptions"] == []
+    assert ctx.exceptions == []
 
 
 # ---- flag_exception -----------------------------------------------------

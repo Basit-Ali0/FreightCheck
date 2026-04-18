@@ -654,10 +654,28 @@ def iso_6346_is_valid(container_number: str) -> bool:
     return check == int(cn[10])
 
 
+_ISO_6346_REFERENCE_DOC = "iso_6346_spec"
+_ISO_6346_REFERENCE_VAL = "4 letters + 7 digits with mod-11 check digit"
+
+
 def check_container_number_format(ctx: ToolContext) -> dict[str, Any]:
     """
     Validate each container number against ISO 6346 format (4 letters +
     7 digits with mod-11 check digit). Purely programmatic, no LLM.
+
+    This is a single-document sanity check, not a cross-document
+    comparison — it produces `ExceptionRecord`s directly (severity
+    ``warning`` per Data Models §5) rather than `ValidationResult`s. A
+    bad check digit is almost always a transcription typo and must not
+    dilute the ``critical`` severity that Data Models §5 reserves for
+    inter-document contradictions.
+
+    Behaviour:
+    - Invalid container(s) found → one `ExceptionRecord` per bad number
+      appended to `ctx.exceptions`.
+    - All containers valid → no state mutation.
+    - No container numbers available on either document → no state
+      mutation; the planner decides whether to `escalate_to_human_review`.
     """
     bol_containers = _get_field(ctx.extracted_fields, "bol", "container_numbers")
     pl_containers = _get_field(ctx.extracted_fields, "packing_list", "container_numbers")
@@ -670,49 +688,59 @@ def check_container_number_format(ctx: ToolContext) -> dict[str, Any]:
         for cn in pl_containers:
             all_numbers.append(("packing_list", str(cn)))
 
-    bol_val = _nullable(bol_containers)
-    pl_val = _nullable(pl_containers)
-
     if not all_numbers:
-        return _build_result(
-            ctx,
-            "container_number_format",
-            "bol",
-            bol_val,
-            "packing_list",
-            pl_val,
-            ValidationStatus.CRITICAL_MISMATCH,
-            "No container numbers available to validate.",
-        )
+        return {
+            "ok": True,
+            "checked": 0,
+            "skipped": True,
+            "reason": "No container numbers present on BoL or Packing List.",
+            "created_exceptions": [],
+        }
 
     invalid: list[tuple[str, str]] = [
         (doc, cn) for doc, cn in all_numbers if not iso_6346_is_valid(cn)
     ]
 
     if not invalid:
-        return _build_result(
-            ctx,
-            "container_number_format",
-            "bol",
-            bol_val,
-            "packing_list",
-            pl_val,
-            ValidationStatus.MATCH,
-            f"All {len(all_numbers)} container numbers pass ISO 6346 check-digit validation.",
-        )
+        return {
+            "ok": True,
+            "checked": len(all_numbers),
+            "skipped": False,
+            "reason": f"All {len(all_numbers)} container numbers pass ISO 6346 "
+            "check-digit validation.",
+            "created_exceptions": [],
+        }
 
-    # Per Data Models §5 catalogue: invalid format → warning (not critical).
-    summary = ", ".join(f"{doc}:{cn}" for doc, cn in invalid)
-    return _build_result(
-        ctx,
-        "container_number_format",
-        "bol",
-        bol_val,
-        "packing_list",
-        pl_val,
-        ValidationStatus.MINOR_MISMATCH,
-        f"ISO 6346 check-digit failed for {len(invalid)} container number(s): {summary}.",
-    )
+    created: list[dict[str, Any]] = []
+    for doc, cn in invalid:
+        record = ExceptionRecord(
+            exception_id=str(uuid.uuid4()),
+            severity=ExceptionSeverity.WARNING,
+            field="container_number_format",
+            description=(
+                f"Container number {cn!r} on {doc} does not satisfy ISO 6346: "
+                f"check digit is invalid. This is typically a transcription "
+                f"typo; the document should be re-checked against the original."
+            ),
+            evidence=Evidence(
+                doc_a=doc,
+                val_a=cn,
+                doc_b=_ISO_6346_REFERENCE_DOC,
+                val_b=_ISO_6346_REFERENCE_VAL,
+            ),
+        )
+        record_dict = record.model_dump(mode="json")
+        ctx.exceptions.append(record_dict)
+        created.append(record_dict)
+
+    return {
+        "ok": False,
+        "checked": len(all_numbers),
+        "skipped": False,
+        "reason": f"{len(invalid)} of {len(all_numbers)} container numbers "
+        "failed ISO 6346 check-digit validation.",
+        "created_exceptions": created,
+    }
 
 
 # ---- 7. flag_exception --------------------------------------------------
