@@ -61,34 +61,6 @@ the bottom of the Open section).
 
 ## Open
 
-
-
-### Q-001: "CI passes on empty PR" cannot be verified locally
-
-- **Raised**: 2026-04-18 during M0
-- **Type**: environment
-- **Context**: M0 DoD (Agent Briefing §Milestone 0) includes the item "CI passes on an empty PR". This requires a GitHub remote with Actions enabled. The local repo was `git init`'d with no remote per user instruction, so this DoD item cannot be verified by the agent.
-- **Spec references**:
-  - `freightcheck_agent_briefing.md` §"Milestone 0 → Definition of Done": "CI passes on an empty PR"
-- **What I did**: Wrote `.github/workflows/ci.yml` with three jobs (backend lint, backend typecheck, frontend lint+typecheck+build), verified each command succeeds locally, and left a `TODO(M2/M3/M6)` comment pointing at Implementation Rules §9.1 for the test-runner extensions added in later milestones. Marked this DoD item as deferred rather than green.
-- **What I need from a human**: Create the GitHub remote, push `main`, open an empty PR, and confirm `ci.yml` passes. Report back whether either job needs adjustment for the hosted runner (e.g. uv cache, Node version mismatch).
-- **Blocking?**: no — every other M0 DoD item is verified locally; this item is purely a remote-side check.
-- **Status**: open
-
-### Q-002: README scope — M0 minimal vs M7 "full" vs M8 deploy
-
-- **Raised**: 2026-04-18 during M0
-- **Type**: ambiguity
-- **Context**: Agent Briefing §"Milestone 0 → Build" says the repo skeleton includes `README.md` "(minimal — full README comes in Milestone 7)", but M7 is the Evaluation Harness milestone and the README requirements (deployed URL, demo GIF, caught-discrepancy example) appear only in M8's DoD. These three references don't line up.
-- **Spec references**:
-  - `freightcheck_agent_briefing.md` §"Milestone 0 → Build": "`README.md` (minimal — full README comes in Milestone 7)"
-  - `freightcheck_agent_briefing.md` §"Milestone 7 → Build": no README items listed
-  - `freightcheck_agent_briefing.md` §"Milestone 8 → Definition of Done": "README contains: deployed URL, 15-second GIF or screenshot, one concrete example..."
-- **What I did**: Wrote a minimal M0 README per the explicit M0 wording (project name, 1-line description, pointer to `knowledge/freightcheck_prd.md` and `knowledge/freightcheck_environment_setup.md`). Will expand it in M8 per the M8 DoD. The "full README comes in Milestone 7" line in the M0 briefing appears to be a spec error — following M8 as the authoritative README milestone.
-- **What I need from a human**: Confirm the README should be expanded in M8 (not M7). If that's correct, consider correcting the M0 briefing parenthetical to say "Milestone 8".
-- **Blocking?**: no
-- **Status**: open
-
 ### Q-004: ISO 6346 severity — Data Models §5 vs plausible domain intent
 
 - **Raised**: 2026-04-18 during M3
@@ -129,4 +101,32 @@ the bottom of the Open section).
 ---
 
 ## Resolved
+
+### Q-001: "CI passes on empty PR" cannot be verified locally
+
+- **Raised**: 2026-04-18 during M0
+- **Type**: environment
+- **Context**: M0 DoD (Agent Briefing §Milestone 0) includes the item "CI passes on an empty PR". This requires a GitHub remote with Actions enabled. The local repo was `git init`'d with no remote per user instruction, so this DoD item cannot be verified by the agent.
+- **Spec references**:
+  - `freightcheck_agent_briefing.md` §"Milestone 0 → Definition of Done": "CI passes on an empty PR"
+- **What I did**: Wrote `.github/workflows/ci.yml` with three jobs (backend lint, backend typecheck, frontend lint+typecheck+build), verified each command succeeds locally, and left a `TODO(M2/M3/M6)` comment pointing at Implementation Rules §9.1 for the test-runner extensions added in later milestones. Marked this DoD item as deferred rather than green.
+- **What I need from a human**: Create the GitHub remote, push `main`, open an empty PR, and confirm `ci.yml` passes. Report back whether either job needs adjustment for the hosted runner (e.g. uv cache, Node version mismatch).
+- **Blocking?**: no — every other M0 DoD item is verified locally; this item is purely a remote-side check.
+- **Status**: resolved
+- **Resolution**: Repo pushed to `https://github.com/Basit-Ali0/FreightCheck.git` on 2026-04-18. CI run [24610743391](https://github.com/Basit-Ali0/FreightCheck/actions/runs/24610743391) on commit `c4a38af` passed both jobs. First push failed on `ruff format --check src/freightcheck/settings.py` (formatting drift from the same-day settings edit) — fixed and re-pushed. Remaining annotations are Node.js 20 deprecation notices from `actions/checkout@v4`, `astral-sh/setup-uv@v3`, and `actions/setup-node@v4`; non-blocking through June 2026 per GitHub's timeline. Decided by Basit on 2026-04-18.
+
+### Q-002: README scope — M0 minimal vs M7 "full" vs M8 deploy
+
+- **Raised**: 2026-04-18 during M0
+- **Type**: ambiguity
+- **Context**: Agent Briefing §"Milestone 0 → Build" says the repo skeleton includes `README.md` "(minimal — full README comes in Milestone 7)", but M7 is the Evaluation Harness milestone and the README requirements (deployed URL, demo GIF, caught-discrepancy example) appear only in M8's DoD. These three references don't line up.
+- **Spec references**:
+  - `freightcheck_agent_briefing.md` §"Milestone 0 → Build": "`README.md` (minimal — full README comes in Milestone 7)"
+  - `freightcheck_agent_briefing.md` §"Milestone 7 → Build": no README items listed
+  - `freightcheck_agent_briefing.md` §"Milestone 8 → Definition of Done": "README contains: deployed URL, 15-second GIF or screenshot, one concrete example..."
+- **What I did**: Wrote a minimal M0 README per the explicit M0 wording (project name, 1-line description, pointer to `knowledge/freightcheck_prd.md` and `knowledge/freightcheck_environment_setup.md`). Will expand it in M8 per the M8 DoD. The "full README comes in Milestone 7" line in the M0 briefing appears to be a spec error — following M8 as the authoritative README milestone.
+- **What I need from a human**: Confirm the README should be expanded in M8 (not M7). If that's correct, consider correcting the M0 briefing parenthetical to say "Milestone 8".
+- **Blocking?**: no
+- **Status**: resolved
+- **Resolution**: Confirmed — README stays minimal through M7 and gets the full treatment (deployed URL, demo GIF/screenshot, one concrete caught-discrepancy example) in M8 per that milestone's DoD. The "Milestone 7" wording in the M0 briefing is a spec typo. Decided by Basit on 2026-04-18.
 

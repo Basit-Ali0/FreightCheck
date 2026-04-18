@@ -13,19 +13,12 @@ agent from implementing the next milestone unless explicitly noted.
 
 ### From Milestone 0 — Repository Setup
 
-- [ ] **M0-1 · Push repo to GitHub.** Create a `freightcheck` repository on
-      GitHub and push the local `main` branch. Needed to verify the
-      `.github/workflows/ci.yml` CI pipeline actually runs green on a PR
-      (tracked as Q-001 in `notes/questions.md`).
 - [ ] **M0-4 · Confirm Tailwind severity / confidence color hex values.**
       `frontend/tailwind.config.js` currently uses conservative Tailwind
       palette defaults for `severity.{critical,warning,info}` and
       `confidence.{low,medium,high}` because the spec did not fix exact hex
       values (tracked as Q-003 in `notes/questions.md`). Swap in brand colors
       whenever convenient before M6 (UI build).
-- [ ] **M0-5 · Confirm README scope.** Current `README.md` is M0-minimal
-      (project name + links). The "full setup instructions" section is planned
-      for M7/M8 (tracked as Q-002). Tell me if you want it expanded earlier.
 
 ### From Milestone 1 — Schemas & Data Contracts
 
@@ -53,12 +46,6 @@ agent from implementing the next milestone unless explicitly noted.
 
 ### From Milestone 3 — Agent Tools & Gemini Wrapper
 
-- [ ] **M3-2 · Confirm Gemini model name & generation settings.** The wrapper
-      defaults to `gemini-2.5-flash` with `temperature=0.0` and
-      `response_mime_type="application/json"` (matching the Environment Setup
-      spec). If you want a different model (`gemini-2.5-pro`, `-flash-lite`,
-      etc.) override `GEMINI_MODEL` in `backend/.env` or pass `model=...`
-      explicitly at call sites.
 - [ ] **M3-3 · Review ISO 6346 tolerance policy.** `check_container_number_format`
       currently downgrades an invalid check digit to `minor_mismatch` per Data
       Models §5's warning-only catalogue entry, but a missing container list
@@ -76,6 +63,13 @@ agent from implementing the next milestone unless explicitly noted.
 
 ## Completed
 
+- **2026-04-18 · M0-1 · Push repo to GitHub.** Remote added at
+  `https://github.com/Basit-Ali0/FreightCheck.git`; CI run
+  [24610743391](https://github.com/Basit-Ali0/FreightCheck/actions/runs/24610743391)
+  on commit `c4a38af` passed both jobs (backend lint+typecheck, frontend
+  lint+typecheck+build). Closes Q-001. The first push also caught a
+  real bug — `ruff format --check` flagged `settings.py` — fixed in
+  commit `c4a38af`.
 - **2026-04-18 · M0-2 · Get a Gemini API key.** Key pasted into
   `backend/.env`; live Gemini integration test
   (`tests/integration/test_gemini_live.py`) passed with a 688-token round
@@ -83,6 +77,14 @@ agent from implementing the next milestone unless explicitly noted.
 - **2026-04-18 · M0-3 · Provision a MongoDB Atlas cluster.** Connection
   string pasted into `backend/.env`. Not exercised yet — M4 persistence
   code will be the first consumer.
+- **2026-04-18 · M0-5 · Confirm README scope.** Decided: README stays
+  minimal through M7 and gets the full treatment (deployed URL, demo
+  GIF, discrepancy example) in M8 per the M8 DoD. Q-002 resolved.
 - **2026-04-18 · M3-1 · Run the live Gemini integration test once
   locally.** `uv run pytest tests/integration/test_gemini_live.py -m
   integration -v -s` — PASSED, `tokens_used=688`.
+- **2026-04-18 · M3-2 · Confirm Gemini model name & generation
+  settings.** Decided: stay on `gemini-2.5-flash` with `temperature=0.0`
+  and `response_mime_type="application/json"` for the life of the
+  project. `GEMINI_MODEL` in `backend/.env` can still override per
+  environment.
