@@ -7,16 +7,18 @@ directly — all env access flows through `Settings`.
 
 from typing import Annotated, Any, Literal
 
-from pydantic import field_validator
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     """Typed environment-backed settings.
 
-    Fields with defaults are optional in `.env`. Fields without defaults
-    (`MONGODB_URI`, `GEMINI_API_KEY`) are required at import time unless the
-    caller is in a test context that patches them.
+    Fields with defaults are optional in `.env`. `MONGODB_URI` and
+    `GEMINI_API_KEY` are required (non-empty) at instantiation; the pytest
+    bootstrap in ``tests/support/env_bootstrap.py`` (called from
+    ``tests/conftest.py``) hoists ``backend/.env`` or applies safe defaults
+    before importing ``freightcheck``.
     """
 
     model_config = SettingsConfigDict(env_file=".env", env_prefix="", extra="ignore")
@@ -43,12 +45,12 @@ class Settings(BaseSettings):
 
     MAX_FILE_SIZE_MB: int = 10
 
-    # Mongo
-    MONGODB_URI: str = ""
+    # Mongo (required — no silent empty defaults)
+    MONGODB_URI: str = Field(min_length=1)
     MONGODB_DB: str = "freightcheck"
 
-    # Gemini
-    GEMINI_API_KEY: str = ""
+    # Gemini (required)
+    GEMINI_API_KEY: str = Field(min_length=1)
     GEMINI_MODEL: str = "gemini-2.5-flash"
     GEMINI_MAX_RETRIES: int = 2
 
@@ -56,6 +58,8 @@ class Settings(BaseSettings):
     AGENT_MAX_ITERATIONS: int = 8
     AGENT_TOKEN_BUDGET: int = 50_000
     AGENT_TIME_BUDGET_MS: int = 25_000
+    # Minimum remaining token budget before semantic baseline catalogue items run.
+    AGENT_SEMANTIC_BASELINE_MIN_REMAINING_TOKENS: int = 2_500
 
     # Upload cache
     UPLOAD_CACHE_TTL_SECONDS: int = 600
@@ -65,4 +69,4 @@ class Settings(BaseSettings):
     LOG_FORMAT: Literal["json", "console"] = "json"
 
 
-settings = Settings()
+settings = Settings()  # type: ignore[call-arg]

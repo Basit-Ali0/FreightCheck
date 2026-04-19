@@ -62,6 +62,8 @@ select = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["PLR2004", "ARG001", "ARG002"]
+# Bootstrap must run before ``freightcheck`` imports (see ``tests/support/env_bootstrap.py``).
+"tests/conftest.py" = ["E402"]
 # The Data Models spec defines string-valued enums via `class X(str, Enum)`
 # rather than `StrEnum`. Keep the spec's pattern verbatim per Implementation
 # Rules §10.

@@ -16,6 +16,7 @@ from freightcheck.errors import (
     PlannerError,
     SemanticValidationError,
 )
+from freightcheck.schemas.planner import PlannerLLMResponse
 from freightcheck.services import gemini
 from tests.fixtures.gemini_responses import good_semantic_response
 
@@ -82,6 +83,38 @@ async def test_call_gemini_happy_path(monkeypatch: pytest.MonkeyPatch) -> None:
     assert parsed.status == "match"
     assert parsed.reason == "same entity"
     assert tokens == 1234
+
+
+async def test_call_gemini_planner_passes_tools_to_raw_call(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Planner tool-calling mode must forward bound tools without breaking retries."""
+    planner_json = '{"chosen_tools": [], "rationale": "x", "terminate": true}'
+    tools_payload = [{"function_declarations": [{"name": "validate_field_match"}]}]
+    captured: list[dict[str, Any]] = []
+
+    async def fake_raw_call(
+        prompt: str,
+        response_schema: type[BaseModel],
+        tools: list[Any] | None = None,
+        system_instruction: str = prompts.SYSTEM_INSTRUCTION,
+    ) -> tuple[str, int]:
+        captured.append({"tools": tools, "schema": response_schema.__name__})
+        return planner_json, 42
+
+    monkeypatch.setattr(gemini, "_raw_gemini_call", fake_raw_call)
+
+    parsed, tokens = await gemini.call_gemini(
+        prompt_name="planner",
+        prompt_template="p {a}",
+        template_vars={"a": 1},
+        response_schema=PlannerLLMResponse,
+        tools=tools_payload,
+    )
+    assert isinstance(parsed, PlannerLLMResponse)
+    assert tokens == 42
+    assert len(captured) == 1
+    assert captured[0]["tools"] == tools_payload
 
 
 async def test_call_gemini_retries_on_malformed_json(monkeypatch: pytest.MonkeyPatch) -> None:

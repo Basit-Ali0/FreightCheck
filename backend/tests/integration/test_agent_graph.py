@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from pydantic import RootModel
@@ -24,6 +24,14 @@ from freightcheck.schemas.documents import (
 from freightcheck.schemas.planner import PlannerLLMResponse as PlannerResp
 from freightcheck.schemas.planner import PlannerToolInvocation as PlannerInv
 from freightcheck.settings import settings
+
+
+def _mock_mongo_session_store() -> Any:
+    """Avoid real Mongo I/O during graph integration tests."""
+    return patch(
+        "freightcheck.services.session_store.get_mongo_session_store",
+        return_value=MagicMock(),
+    )
 
 
 def _high_conf_bol() -> BolExtractionResponse:
@@ -94,6 +102,7 @@ def _low_conf_bol() -> BolExtractionResponse:
 @pytest.mark.asyncio
 async def test_agent_graph_happy_path_terminates_under_two_seconds() -> None:
     calls: list[str] = []
+    planner_tool_batches: list[list[Any] | None] = []
 
     async def fake_gemini(
         prompt_name: str,
@@ -104,6 +113,8 @@ async def test_agent_graph_happy_path_terminates_under_two_seconds() -> None:
         system_instruction: str | None = None,
     ) -> tuple[Any, int]:
         calls.append(prompt_name)
+        if prompt_name == "planner":
+            planner_tool_batches.append(tools)
         if prompt_name == "bol_extraction":
             return _high_conf_bol(), 10
         if prompt_name == "invoice_extraction":
@@ -131,7 +142,10 @@ async def test_agent_graph_happy_path_terminates_under_two_seconds() -> None:
         "sess-happy",
         {"bol": "b", "invoice": "i", "packing_list": "p"},
     )
-    with patch("freightcheck.services.gemini.call_gemini", new=fake_gemini):
+    with (
+        _mock_mongo_session_store(),
+        patch("freightcheck.services.gemini.call_gemini", new=fake_gemini),
+    ):
         app = build_graph()
         out = await app.ainvoke(state, {"configurable": {"thread_id": "sess-happy"}})
 
@@ -140,6 +154,9 @@ async def test_agent_graph_happy_path_terminates_under_two_seconds() -> None:
     assert "planner" in calls
     assert "summary" in calls
     assert any(tc.get("tool_name") == "check_container_number_format" for tc in out["tool_calls"])
+    assert planner_tool_batches, "planner should be invoked at least once"
+    assert planner_tool_batches[0] is not None
+    assert len(planner_tool_batches[0]) > 0
 
 
 @pytest.mark.asyncio
@@ -181,6 +198,7 @@ async def test_budget_max_iterations_runs_compile_report() -> None:
 
     state = make_initial_state("sess-cap", {"bol": "b", "invoice": "i", "packing_list": "p"})
     with (
+        _mock_mongo_session_store(),
         patch.object(settings, "AGENT_MAX_ITERATIONS", 3),
         patch("freightcheck.services.gemini.call_gemini", new=fake_gemini),
     ):
@@ -215,7 +233,10 @@ async def test_low_confidence_sets_awaiting_review() -> None:
         raise AssertionError(prompt_name)
 
     state = make_initial_state("sess-low", {"bol": "b", "invoice": "i", "packing_list": "p"})
-    with patch("freightcheck.services.gemini.call_gemini", new=fake_gemini):
+    with (
+        _mock_mongo_session_store(),
+        patch("freightcheck.services.gemini.call_gemini", new=fake_gemini),
+    ):
         out = await build_graph().ainvoke(state, {"configurable": {"thread_id": "sess-low"}})
 
     assert out["status"] == "awaiting_review"
@@ -253,7 +274,10 @@ async def test_injection_unknown_tool_recorded_not_executed() -> None:
         raise AssertionError(prompt_name)
 
     state = make_initial_state("sess-inj", {"bol": "b", "invoice": "i", "packing_list": "p"})
-    with patch("freightcheck.services.gemini.call_gemini", new=fake_gemini):
+    with (
+        _mock_mongo_session_store(),
+        patch("freightcheck.services.gemini.call_gemini", new=fake_gemini),
+    ):
         out = await build_graph().ainvoke(state, {"configurable": {"thread_id": "sess-inj"}})
 
     bad = [tc for tc in out["tool_calls"] if tc.get("tool_name") == "drop_database"]
@@ -289,9 +313,15 @@ async def test_checkpoint_mirror_called_each_node() -> None:
             return RootModel[str](root="x"), 1
         raise AssertionError(prompt_name)
 
-    state = make_initial_state("sess-mirror", {"bol": "b", "invoice": "i", "packing_list": "p"})
+    state = make_initial_state(
+        "sess-mirror",
+        {"bol": "b", "invoice": "i", "packing_list": "p"},
+    )
     saver = MongoMirroringSaver(on_checkpoint=on_checkpoint)
-    with patch("freightcheck.services.gemini.call_gemini", new=fake_gemini):
+    with (
+        _mock_mongo_session_store(),
+        patch("freightcheck.services.gemini.call_gemini", new=fake_gemini),
+    ):
         await build_graph(checkpointer=saver).ainvoke(
             state,
             {"configurable": {"thread_id": "sess-mirror"}},
@@ -300,3 +330,45 @@ async def test_checkpoint_mirror_called_each_node() -> None:
     assert len(writes) >= 5
     assert all(sid == "sess-mirror" for sid, _ in writes)
     assert all("raw_texts" not in doc for _, doc in writes)
+
+
+@pytest.mark.asyncio
+async def test_default_graph_uses_mongo_session_store_for_checkpoints() -> None:
+    """Without an injected saver, `build_graph` mirrors checkpoints via MongoSessionStore."""
+    mock_store = MagicMock()
+
+    async def fake_gemini(
+        prompt_name: str,
+        prompt_template: str,
+        template_vars: dict[str, Any],
+        response_schema: type[Any],
+        tools: list[Any] | None = None,
+        system_instruction: str | None = None,
+    ) -> tuple[Any, int]:
+        if prompt_name == "bol_extraction":
+            return _high_conf_bol(), 1
+        if prompt_name == "invoice_extraction":
+            return _high_conf_invoice(), 1
+        if prompt_name == "packing_list_extraction":
+            return _high_conf_pl(), 1
+        if prompt_name == "planner":
+            return PlannerResp(chosen_tools=[], rationale="done", terminate=True), 1
+        if prompt_name == "summary":
+            return RootModel[str](root="x"), 1
+        raise AssertionError(prompt_name)
+
+    state = make_initial_state(
+        "sess-default-mongo",
+        {"bol": "b", "invoice": "i", "packing_list": "p"},
+    )
+    with (
+        patch(
+            "freightcheck.services.session_store.get_mongo_session_store",
+            return_value=mock_store,
+        ),
+        patch("freightcheck.services.gemini.call_gemini", new=fake_gemini),
+    ):
+        await build_graph().ainvoke(state, {"configurable": {"thread_id": "sess-default-mongo"}})
+
+    # One LangGraph checkpoint write per node transition plus final compile_report persist.
+    assert mock_store.upsert_checkpoint.call_count >= 5

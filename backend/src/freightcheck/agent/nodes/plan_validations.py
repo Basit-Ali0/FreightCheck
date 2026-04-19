@@ -13,7 +13,7 @@ import structlog
 
 from freightcheck.agent import prompts
 from freightcheck.agent.state import AgentState
-from freightcheck.agent.tools import TOOL_REGISTRY
+from freightcheck.agent.tools import TOOL_REGISTRY, build_planner_gemini_tools
 from freightcheck.errors import PlannerError
 from freightcheck.schemas.agent import PlannerDecision, ToolCall
 from freightcheck.schemas.planner import PlannerLLMResponse
@@ -108,6 +108,7 @@ async def plan_validations(state: AgentState) -> dict[str, Any]:
             prompt_template=prompts.PLANNER_PROMPT,
             template_vars=template_vars,
             response_schema=PlannerLLMResponse,
+            tools=build_planner_gemini_tools(),
         )
     except PlannerError as exc:
         elapsed_ms = int((perf_counter() - t0) * 1000)

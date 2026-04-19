@@ -16,6 +16,12 @@ from freightcheck.agent.nodes.extract_all import extract_all
 from freightcheck.agent.nodes.plan_validations import plan_validations
 from freightcheck.agent.nodes.reflect import reflect
 from freightcheck.agent.state import AgentState
+from freightcheck.services import session_store
+
+
+def _checkpoint_mongo_write(thread_id: str, doc: dict[str, Any]) -> None:
+    """Mirror checkpoints to the shared Mongo-backed session store."""
+    session_store.get_mongo_session_store().upsert_checkpoint(thread_id, doc)
 
 
 def make_initial_state(session_id: str, raw_texts: dict[str, str]) -> AgentState:
@@ -43,7 +49,12 @@ def make_initial_state(session_id: str, raw_texts: dict[str, str]) -> AgentState
 
 def build_graph(*, checkpointer: Any | None = None) -> CompiledStateGraph[AgentState]:
     """Compile the FreightCheck audit graph."""
-    saver = checkpointer if checkpointer is not None else MongoMirroringSaver()
+    if checkpointer is not None:
+        saver = checkpointer
+    else:
+        saver = MongoMirroringSaver(
+            on_checkpoint=_checkpoint_mongo_write,
+        )
     g: StateGraph[AgentState] = StateGraph(AgentState)
     g.add_node("extract_all", extract_all)
     g.add_node("plan_validations", plan_validations)

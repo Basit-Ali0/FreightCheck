@@ -15,20 +15,22 @@ Tool contract (M3 scope):
 - State-mutation tools (`flag_exception`, `escalate_to_human_review`) append
   to the shared `ToolContext` lists; they never raise.
 
-The `@tool` decoration that exposes these functions to Gemini's
-`bind_tools()` is wired in M4 when the planner node is built — M3 keeps
-tools as plain callables so the unit suite stays SDK-free.
+`TOOL_REGISTRY` holds LangChain `StructuredTool` instances so Gemini receives
+native JSON Schemas via `build_planner_gemini_tools()`; the dispatcher is the
+only execution path and calls `TOOL_IMPLEMENTATIONS` with a `ToolContext`.
 """
 
 from __future__ import annotations
 
 import re
 import uuid
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
-from pydantic import BaseModel
+from google.genai import types as genai_types
+from langchain_core.tools import StructuredTool
+from pydantic import BaseModel, ConfigDict
 
 from freightcheck.agent import prompts
 from freightcheck.errors import ToolArgsValidationError
@@ -94,6 +96,188 @@ def _validate_doc_keys(*docs: str) -> None:
             )
 
 
+def _sum_line_item_quantities(extracted: dict[str, Any], doc: str) -> Any:
+    items = _get_field(extracted, doc, "line_items")
+    if items is _MISSING or not isinstance(items, list):
+        return _MISSING
+    total = 0.0
+    for row in items:
+        if not isinstance(row, dict):
+            continue
+        q = row.get("quantity")
+        if q is None:
+            return _MISSING
+        try:
+            total += float(q)
+        except (TypeError, ValueError, ArithmeticError):
+            return _MISSING
+    return total
+
+
+def _first_invoice_line_description(ctx: ToolContext) -> Any:
+    inv = ctx.extracted_fields.get("invoice")
+    if not isinstance(inv, dict):
+        return _MISSING
+    items = inv.get("line_items")
+    if not isinstance(items, list) or not items:
+        return _MISSING
+    row0 = items[0]
+    if not isinstance(row0, dict):
+        return _MISSING
+    if "description" not in row0:
+        return _MISSING
+    return row0.get("description")
+
+
+def _validate_total_quantity_match(
+    ctx: ToolContext,
+    doc_a: DocType,
+    doc_b: DocType,
+) -> dict[str, Any]:
+    """Data Models §5 `total_quantity`: sum of line item quantities, exact match."""
+    q_a = _sum_line_item_quantities(ctx.extracted_fields, doc_a)
+    q_b = _sum_line_item_quantities(ctx.extracted_fields, doc_b)
+    field_name = "total_quantity"
+    if q_a is _MISSING:
+        return _build_result(
+            ctx,
+            field_name,
+            doc_a,
+            None,
+            doc_b,
+            q_b if q_b is not _MISSING else None,
+            ValidationStatus.CRITICAL_MISMATCH,
+            f"Could not derive total quantity from {doc_a} line_items.",
+        )
+    if q_b is _MISSING:
+        return _build_result(
+            ctx,
+            field_name,
+            doc_a,
+            q_a,
+            doc_b,
+            None,
+            ValidationStatus.CRITICAL_MISMATCH,
+            f"Could not derive total quantity from {doc_b} line_items.",
+        )
+    diff = abs(float(q_a) - float(q_b))
+    if diff <= 0.0:
+        return _build_result(
+            ctx,
+            field_name,
+            doc_a,
+            q_a,
+            doc_b,
+            q_b,
+            ValidationStatus.MATCH,
+            "Total quantities (sum of line_items.quantity) match exactly.",
+        )
+    return _build_result(
+        ctx,
+        field_name,
+        doc_a,
+        q_a,
+        doc_b,
+        q_b,
+        ValidationStatus.CRITICAL_MISMATCH,
+        f"Total quantity mismatch: {q_a} vs {q_b} (exact match required).",
+    )
+
+
+def _invoice_total_line_items_error(
+    ctx: ToolContext,
+    total_value: Any,
+    compared_value: Any,
+    reason: str,
+) -> dict[str, Any]:
+    """Return the standard invoice-total mismatch envelope."""
+    return _build_result(
+        ctx,
+        "invoice_total_vs_line_items",
+        "invoice",
+        total_value,
+        "invoice",
+        compared_value,
+        ValidationStatus.CRITICAL_MISMATCH,
+        reason,
+    )
+
+
+def _coerce_line_item_number(value: Any, *, field_name: str) -> float:
+    if value is None:
+        raise ValueError(f"Line item missing {field_name}.")
+    return float(value)
+
+
+def _validate_invoice_total_vs_line_items(
+    ctx: ToolContext,
+    tolerance: float,
+) -> dict[str, Any]:
+    """Data Models §5 `invoice_total_vs_line_items` with §6 monetary tolerance."""
+    inv = ctx.extracted_fields.get("invoice")
+    if not isinstance(inv, dict):
+        return _invoice_total_line_items_error(
+            ctx,
+            None,
+            None,
+            "Invoice extracted_fields missing or invalid.",
+        )
+    total_value = inv.get("total_value")
+    items = inv.get("line_items")
+    if total_value is None or items is _MISSING or not isinstance(items, list):
+        return _invoice_total_line_items_error(
+            ctx,
+            total_value,
+            None,
+            "Missing total_value or line_items on invoice.",
+        )
+    line_sum = 0.0
+    for row in items:
+        if not isinstance(row, dict):
+            continue
+        try:
+            quantity = _coerce_line_item_number(row.get("quantity"), field_name="quantity")
+            unit_price = _coerce_line_item_number(row.get("unit_price"), field_name="unit_price")
+            line_sum += quantity * unit_price
+        except (TypeError, ValueError, ArithmeticError) as exc:
+            return _invoice_total_line_items_error(
+                ctx,
+                total_value,
+                line_sum,
+                f"Could not sum line items: {exc}",
+            )
+    try:
+        diff = abs(float(total_value) - float(line_sum))
+    except (TypeError, ValueError, ArithmeticError) as exc:
+        return _invoice_total_line_items_error(
+            ctx,
+            total_value,
+            line_sum,
+            f"Invalid numeric total_value: {exc}",
+        )
+    if diff <= tolerance:
+        return _build_result(
+            ctx,
+            "invoice_total_vs_line_items",
+            "invoice",
+            total_value,
+            "invoice",
+            line_sum,
+            ValidationStatus.MATCH,
+            f"|total_value - sum(qty*unit_price)| = {diff:g} <= tolerance {tolerance:g}.",
+        )
+    return _build_result(
+        ctx,
+        "invoice_total_vs_line_items",
+        "invoice",
+        total_value,
+        "invoice",
+        line_sum,
+        ValidationStatus.CRITICAL_MISMATCH,
+        f"|total_value - sum(qty*unit_price)| = {diff:g} > tolerance {tolerance:g}.",
+    )
+
+
 def _build_result(  # noqa: PLR0913 — positional construction keeps call sites compact
     ctx: ToolContext,
     field_name: str,
@@ -120,12 +304,13 @@ def _build_result(  # noqa: PLR0913 — positional construction keeps call sites
 # ---- 1. validate_field_match --------------------------------------------
 
 
-def validate_field_match(  # noqa: PLR0911 — each branch is a distinct validation outcome
+def validate_field_match(  # noqa: PLR0911, PLR0913
     ctx: ToolContext,
     field: str,
     doc_a: DocType,
     doc_b: DocType,
     tolerance: float = 0.0,
+    peer_field: str | None = None,
 ) -> dict[str, Any]:
     """
     Compare the same canonical field across two documents using exact or
@@ -135,8 +320,14 @@ def validate_field_match(  # noqa: PLR0911 — each branch is a distinct validat
     """
     _validate_doc_keys(doc_a, doc_b)
 
+    if field == "total_quantity":
+        return _validate_total_quantity_match(ctx, doc_a, doc_b)
+    if field == "invoice_total_vs_line_items":
+        return _validate_invoice_total_vs_line_items(ctx, tolerance)
+
+    field_b = peer_field or field
     val_a = _get_field(ctx.extracted_fields, doc_a, field)
-    val_b = _get_field(ctx.extracted_fields, doc_b, field)
+    val_b = _get_field(ctx.extracted_fields, doc_b, field_b)
 
     if val_a is _MISSING:
         return _build_result(
@@ -292,45 +483,86 @@ async def validate_field_semantic(
     """
     _validate_doc_keys(doc_a, doc_b)
 
-    val_a = _get_field(ctx.extracted_fields, doc_a, field)
-    val_b = _get_field(ctx.extracted_fields, doc_b, field)
+    canonical_field = field
+    prompt_doc_a = doc_a
+    prompt_doc_b = doc_b
+    if field == "shipper_seller":
+        val_a = _get_field(ctx.extracted_fields, "bol", "shipper")
+        val_b = _get_field(ctx.extracted_fields, "invoice", "seller")
+        canonical_field = "shipper_seller"
+        prompt_doc_a, prompt_doc_b = "bol", "invoice"
+    elif field == "consignee_buyer":
+        val_a = _get_field(ctx.extracted_fields, "bol", "consignee")
+        val_b = _get_field(ctx.extracted_fields, "invoice", "buyer")
+        canonical_field = "consignee_buyer"
+        prompt_doc_a, prompt_doc_b = "bol", "invoice"
+    elif field == "description_of_goods":
+        val_a = _get_field(ctx.extracted_fields, "bol", "description_of_goods")
+        val_b = _first_invoice_line_description(ctx)
+        canonical_field = "description_of_goods"
+        prompt_doc_a, prompt_doc_b = "bol", "invoice"
+    elif field == "currency_seller_plausibility":
+        val_a = _get_field(ctx.extracted_fields, "invoice", "currency")
+        val_b = _get_field(ctx.extracted_fields, "invoice", "seller")
+        canonical_field = "currency_seller_plausibility"
+        prompt_doc_a, prompt_doc_b = "invoice", "invoice"
+    else:
+        val_a = _get_field(ctx.extracted_fields, doc_a, field)
+        val_b = _get_field(ctx.extracted_fields, doc_b, field)
 
     if val_a is _MISSING or val_b is _MISSING:
-        missing_doc = doc_a if val_a is _MISSING else doc_b
+        if field in {"shipper_seller", "consignee_buyer", "description_of_goods"}:
+            missing_doc = "bol" if val_a is _MISSING else "invoice"
+        elif field == "currency_seller_plausibility":
+            missing_doc = "invoice"
+        else:
+            missing_doc = doc_a if val_a is _MISSING else doc_b
         return _build_result(
             ctx,
-            field,
-            doc_a,
+            canonical_field,
+            prompt_doc_a,
             None if val_a is _MISSING else val_a,
-            doc_b,
+            prompt_doc_b,
             None if val_b is _MISSING else val_b,
             ValidationStatus.CRITICAL_MISMATCH,
-            f"Field '{field}' missing from {missing_doc}.",
+            f"Field '{canonical_field}' missing from {missing_doc}.",
         )
 
     parsed, tokens = await gemini.call_gemini(
         prompt_name="semantic_validator",
         prompt_template=prompts.SEMANTIC_VALIDATOR_PROMPT,
         template_vars={
-            "field_name": field,
-            "doc_a": doc_a,
+            "field_name": canonical_field,
+            "doc_a": prompt_doc_a,
             "value_a": val_a,
-            "doc_b": doc_b,
+            "doc_b": prompt_doc_b,
             "value_b": val_b,
         },
         response_schema=_SemanticResponse,
     )
     ctx.tokens_used += tokens
 
+    out_status = parsed.status
+    out_reason = parsed.reason
+    if (
+        canonical_field == "currency_seller_plausibility"
+        and out_status == ValidationStatus.CRITICAL_MISMATCH
+    ):
+        out_status = ValidationStatus.MINOR_MISMATCH
+        out_reason = (
+            f"{out_reason} (currency vs seller heuristic is advisory per Data Models §5; "
+            "never escalated to critical.)"
+        )
+
     return _build_result(
         ctx,
-        field,
-        doc_a,
+        canonical_field,
+        prompt_doc_a,
         val_a,
-        doc_b,
+        prompt_doc_b,
         val_b,
-        parsed.status,
-        parsed.reason,
+        out_status,
+        out_reason,
     )
 
 
@@ -809,11 +1041,59 @@ def escalate_to_human_review(ctx: ToolContext, reason: str) -> dict[str, Any]:
     }
 
 
-# ---- Registry -----------------------------------------------------------
+# ---- LangChain tool schemas + registry (M3/M4) --------------------------
 
-ToolCallable = Callable[..., dict[str, Any] | Awaitable[dict[str, Any]]]
 
-TOOL_REGISTRY: dict[str, ToolCallable] = {
+class EmptyArgs(BaseModel):
+    """Tools that take no planner arguments beyond implicit context."""
+
+    model_config = ConfigDict(extra="ignore")
+
+
+class ValidateFieldMatchArgs(BaseModel):
+    field: str
+    doc_a: DocType
+    doc_b: DocType
+    tolerance: float = 0.0
+    peer_field: str | None = None
+
+
+class ValidateFieldSemanticArgs(BaseModel):
+    field: str
+    doc_a: DocType
+    doc_b: DocType
+
+
+class ReExtractFieldArgs(BaseModel):
+    doc_type: DocType
+    field: str
+    hint: str
+
+
+class FlagExceptionArgs(BaseModel):
+    severity: Literal["info", "warning", "critical"]
+    field: str
+    description: str
+    evidence: dict[str, Any]
+
+
+class EscalateArgs(BaseModel):
+    reason: str
+
+
+def _sync_tool_stub(**_kwargs: Any) -> str:
+    raise RuntimeError(
+        "FreightCheck tools execute only via the dispatcher with ToolContext.",
+    )
+
+
+async def _async_tool_stub(**_kwargs: Any) -> str:
+    raise RuntimeError(
+        "FreightCheck tools execute only via the dispatcher with ToolContext.",
+    )
+
+
+TOOL_IMPLEMENTATIONS: dict[str, Callable[..., Any]] = {
     "validate_field_match": validate_field_match,
     "validate_field_semantic": validate_field_semantic,
     "re_extract_field": re_extract_field,
@@ -823,3 +1103,95 @@ TOOL_REGISTRY: dict[str, ToolCallable] = {
     "flag_exception": flag_exception,
     "escalate_to_human_review": escalate_to_human_review,
 }
+
+
+def _structured_tool(
+    *,
+    name: str,
+    description: str,
+    args_schema: type[BaseModel],
+    coroutine: Callable[..., Any] | None = None,
+) -> StructuredTool:
+    if coroutine is not None:
+        return StructuredTool.from_function(
+            coroutine=coroutine,
+            name=name,
+            description=description,
+            args_schema=args_schema,
+            infer_schema=False,
+        )
+    return StructuredTool.from_function(
+        func=_sync_tool_stub,
+        name=name,
+        description=description,
+        args_schema=args_schema,
+        infer_schema=False,
+    )
+
+
+TOOL_REGISTRY: dict[str, StructuredTool] = {
+    "validate_field_match": _structured_tool(
+        name="validate_field_match",
+        description=(validate_field_match.__doc__ or "").strip(),
+        args_schema=ValidateFieldMatchArgs,
+    ),
+    "validate_field_semantic": _structured_tool(
+        name="validate_field_semantic",
+        description=(validate_field_semantic.__doc__ or "").strip(),
+        args_schema=ValidateFieldSemanticArgs,
+        coroutine=_async_tool_stub,
+    ),
+    "re_extract_field": _structured_tool(
+        name="re_extract_field",
+        description=(re_extract_field.__doc__ or "").strip(),
+        args_schema=ReExtractFieldArgs,
+        coroutine=_async_tool_stub,
+    ),
+    "check_container_consistency": _structured_tool(
+        name="check_container_consistency",
+        description=(check_container_consistency.__doc__ or "").strip(),
+        args_schema=EmptyArgs,
+    ),
+    "check_incoterm_port_plausibility": _structured_tool(
+        name="check_incoterm_port_plausibility",
+        description=(check_incoterm_port_plausibility.__doc__ or "").strip(),
+        args_schema=EmptyArgs,
+    ),
+    "check_container_number_format": _structured_tool(
+        name="check_container_number_format",
+        description=(check_container_number_format.__doc__ or "").strip(),
+        args_schema=EmptyArgs,
+    ),
+    "flag_exception": _structured_tool(
+        name="flag_exception",
+        description=(flag_exception.__doc__ or "").strip(),
+        args_schema=FlagExceptionArgs,
+    ),
+    "escalate_to_human_review": _structured_tool(
+        name="escalate_to_human_review",
+        description=(escalate_to_human_review.__doc__ or "").strip(),
+        args_schema=EscalateArgs,
+    ),
+}
+
+
+def build_planner_gemini_tools() -> list[Any]:
+    """Convert registered tools to Gemini `Tool` function declarations."""
+    decls: list[Any] = []
+    for name in sorted(TOOL_REGISTRY.keys()):
+        lc_tool = TOOL_REGISTRY[name]
+        desc = (lc_tool.description or name).strip()
+        args_schema = lc_tool.args_schema
+        schema = (
+            args_schema.model_json_schema()
+            if isinstance(args_schema, type) and issubclass(args_schema, BaseModel)
+            else {"type": "object", "properties": {}}
+        )
+        decls.append(
+            genai_types.FunctionDeclaration(
+                name=name,
+                description=desc[:4096],
+                parameters_json_schema=schema,
+            ),
+        )
+    return [genai_types.Tool(function_declarations=decls)] if decls else []

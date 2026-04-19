@@ -11,6 +11,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from langchain_core.tools import StructuredTool
 
 from freightcheck.agent import tools
 from freightcheck.agent.tools import (
@@ -110,6 +111,63 @@ def test_validate_field_match_rejects_unknown_doc() -> None:
     ctx = _make_ctx()
     with pytest.raises(ToolArgsValidationError):
         validate_field_match(ctx, "incoterm", "bol", "unknown_doc")  # type: ignore[arg-type]
+
+
+def test_validate_field_match_peer_field_cross_names() -> None:
+    ctx = _make_ctx(
+        extracted={
+            "bol": {"gross_weight": 100.0},
+            "packing_list": {"total_weight": 100.4},
+        },
+    )
+    result = validate_field_match(
+        ctx,
+        "gross_weight",
+        "bol",
+        "packing_list",
+        tolerance=0.5,
+        peer_field="total_weight",
+    )
+    assert result["status"] == ValidationStatus.MATCH.value
+
+
+def test_validate_total_quantity_exact() -> None:
+    ctx = _make_ctx(
+        extracted={
+            "invoice": {"line_items": [{"quantity": 3, "unit_price": 1.0, "description": "a"}]},
+            "packing_list": {
+                "line_items": [{"quantity": 3, "net_weight": 1.0, "description": "b"}],
+            },
+        },
+    )
+    result = validate_field_match(
+        ctx,
+        "total_quantity",
+        "invoice",
+        "packing_list",
+        tolerance=0.0,
+    )
+    assert result["status"] == ValidationStatus.MATCH.value
+    assert result["field"] == "total_quantity"
+
+
+def test_validate_invoice_total_vs_line_items_within_money_tolerance() -> None:
+    ctx = _make_ctx(
+        extracted={
+            "invoice": {
+                "total_value": 100.005,
+                "line_items": [{"quantity": 10, "unit_price": 10.0, "description": "x"}],
+            },
+        },
+    )
+    result = validate_field_match(
+        ctx,
+        "invoice_total_vs_line_items",
+        "invoice",
+        "invoice",
+        tolerance=0.01,
+    )
+    assert result["status"] == ValidationStatus.MATCH.value
 
 
 # ---- validate_field_semantic --------------------------------------------
@@ -456,7 +514,7 @@ def test_tool_registry_exposes_all_eight_tools() -> None:
 
 
 def test_every_registered_tool_has_a_docstring() -> None:
-    for name, fn in tools.TOOL_REGISTRY.items():
-        doc = fn.__doc__
-        assert doc is not None, f"Tool {name} is missing a docstring"
-        assert doc.strip(), f"Tool {name} has an empty docstring"
+    for name, lc_tool in tools.TOOL_REGISTRY.items():
+        assert isinstance(lc_tool, StructuredTool), name
+        desc = (lc_tool.description or "").strip()
+        assert desc, f"Tool {name} is missing a description/docstring"
