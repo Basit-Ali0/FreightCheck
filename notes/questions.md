@@ -73,6 +73,32 @@ the bottom of the Open section).
 - **Blocking?**: no
 - **Status**: open
 
+### Q-007: `SessionNotFoundError` status code — 400 for `/audit` vs 404 for `/sessions/:id`
+
+- **Raised**: 2026-04-19 during M5
+- **Type**: conflict
+- **Context**: The global exception handler in `main.py` maps `SessionNotFoundError` → 404, which is correct for `GET /sessions/:id` lookups. However, the API Contract specifies that a cache miss on `POST /audit` should return 400 with error `SessionNotFoundError`.
+- **Spec references**:
+  - `freightcheck_api_contract.md` §`POST /audit` error responses: "400 — session_id not found in upload cache" with `{ "error": "SessionNotFoundError", "detail": "..." }`
+  - `freightcheck_main.py` `_ERROR_STATUS`: `SessionNotFoundError: 404`
+- **What I did**: Handled the cache-miss case at the route level in `api/audit.py` by catching `SessionNotFoundError` from `upload_cache.get()` and returning a `JSONResponse(status_code=400, ...)` directly, bypassing the global handler. The global 404 mapping still applies to `GET /sessions/:id`.
+- **Resolution (M6)**: This split is the chosen contract: **400 + `SessionNotFoundError` on `POST /audit` cache miss**; **404 for missing `GET /sessions/:id` and `GET /sessions/:id/trajectory`**.
+- **Blocking?**: no
+- **Status**: resolved
+
+### Q-008: `GET /sessions/:id` response model — flat dict vs Pydantic model
+
+- **Raised**: 2026-04-19 during M5
+- **Type**: ambiguity
+- **Context**: API Contract shows the `GET /sessions/:id` response as a flat JSON object with all `AuditSession` fields. The existing `AuditSession` Pydantic model matches the shape and is also the Mongo document model. The question is whether to use `AuditSession` as the explicit `response_model` or return a raw dict (which is what the Mongo doc already is).
+- **Spec references**:
+  - `freightcheck_api_contract.md` §`GET /sessions/:id`: full session JSON shape
+  - `freightcheck_data_models.md` §1.4: `AuditSession` class
+- **What I did (current)**: `GET /sessions/{session_id}` uses **`response_model=AuditSession`**: the handler loads the Mongo document, strips `_id` / `updated_at`, and returns **`AuditSession.model_validate(doc)`** so the wire shape is always validated against the canonical schema (`backend/src/freightcheck/api/sessions.py`).
+- **Resolution (M6)**: **`response_model=AuditSession` is the final contract**; stale notes preferring an unvalidated raw dict are retracted.
+- **Blocking?**: no
+- **Status**: resolved
+
 ---
 
 ## Resolved
