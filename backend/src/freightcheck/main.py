@@ -17,6 +17,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.responses import Response
 
+from freightcheck.api import audit as audit_router
+from freightcheck.api import health as health_router
+from freightcheck.api import sessions as sessions_router
 from freightcheck.api import upload as upload_router
 from freightcheck.errors import (
     DatabaseError,
@@ -101,6 +104,9 @@ def create_app() -> FastAPI:
         return _error_response(exc, status_code)
 
     app.include_router(upload_router.router)
+    app.include_router(audit_router.router)
+    app.include_router(sessions_router.router)
+    app.include_router(health_router.router)
     return app
 
 
