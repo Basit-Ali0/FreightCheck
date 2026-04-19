@@ -37,14 +37,22 @@ async def _run_agent(session_id: str, raw_texts: dict[str, str]) -> None:
             config={"configurable": {"thread_id": session_id}},
         )
     except Exception:
-        log.exception("agent.error", session_id=session_id, error_type="UnhandledAgentError",
-                       error_message="Agent crashed", node_name="run_agent")
+        log.exception(
+            "agent.error",
+            session_id=session_id,
+            error_type="UnhandledAgentError",
+            error_message="Agent crashed",
+            node_name="run_agent",
+        )
         try:
-            await store.upsert_checkpoint_async(session_id, {
-                "status": SessionStatus.FAILED.value,
-                "error_message": "Agent crashed unexpectedly. Check server logs.",
-                "completed_at": datetime.now(UTC).isoformat(),
-            })
+            await store.upsert_checkpoint_async(
+                session_id,
+                {
+                    "status": SessionStatus.FAILED.value,
+                    "error_message": "Agent crashed unexpectedly. Check server logs.",
+                    "completed_at": datetime.now(UTC).isoformat(),
+                },
+            )
         except Exception:
             log.exception("agent.error_persist_failed", session_id=session_id)
 

@@ -173,8 +173,7 @@ def _semantic_skip_suffix(skipped: list[str]) -> str:
         else f" (+{len(skipped) - _SEMANTIC_SKIP_PREVIEW_COUNT} more)"
     )
     return (
-        f" Semantic baseline checks were skipped due to low remaining token budget: "
-        f"{slim}{more}."
+        f" Semantic baseline checks were skipped due to low remaining token budget: {slim}{more}."
     )
 
 

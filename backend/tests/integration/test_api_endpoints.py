@@ -67,8 +67,14 @@ def _sample_completed_session(session_id: str = "test-session-1") -> dict[str, A
         "error_message": None,
         "extracted_fields": {"bol": {"incoterm": "CIF"}, "invoice": {"incoterm": "CIF"}},
         "extraction_confidence": {
-            "bol": {"incoterm": {"field": "incoterm", "value": "CIF",
-                                 "confidence": 0.98, "rationale": None}},
+            "bol": {
+                "incoterm": {
+                    "field": "incoterm",
+                    "value": "CIF",
+                    "confidence": 0.98,
+                    "rationale": None,
+                }
+            },
         },
         "exceptions": [],
         "report": {
@@ -83,8 +89,7 @@ def _sample_completed_session(session_id: str = "test-session-1") -> dict[str, A
                 "tool_call_id": "tc-0001",
                 "iteration": 1,
                 "tool_name": "validate_field_match",
-                "args": {"field": "incoterm", "doc_a": "bol", "doc_b": "invoice",
-                         "tolerance": 0.0},
+                "args": {"field": "incoterm", "doc_a": "bol", "doc_b": "invoice", "tolerance": 0.0},
                 "result": {"status": "match"},
                 "started_at": "2026-04-18T10:30:15.120Z",
                 "completed_at": "2026-04-18T10:30:15.140Z",
@@ -124,9 +129,7 @@ class FakeSessionStore:
     async def ensure_indexes(self) -> None:
         pass
 
-    async def create_audit_session_if_absent(
-        self, session_id: str, doc: dict[str, Any]
-    ) -> None:
+    async def create_audit_session_if_absent(self, session_id: str, doc: dict[str, Any]) -> None:
         """Atomically reject duplicate ``session_id`` (mirrors Mongo unique index)."""
         if session_id in self._data:
             raise DuplicateAuditError(
@@ -139,16 +142,12 @@ class FakeSessionStore:
             row["created_at"] = datetime.now(UTC).isoformat()
         self._data[session_id] = row
 
-    async def upsert_checkpoint_async(
-        self, session_id: str, doc: dict[str, Any]
-    ) -> None:
+    async def upsert_checkpoint_async(self, session_id: str, doc: dict[str, Any]) -> None:
         existing = self._data.get(session_id, {})
         existing.update(doc)
         existing["session_id"] = session_id
         if "created_at" not in existing:
-            existing["created_at"] = doc.get(
-                "created_at", datetime.now(UTC).isoformat()
-            )
+            existing["created_at"] = doc.get("created_at", datetime.now(UTC).isoformat())
         self._data[session_id] = existing
 
     def upsert_checkpoint(self, session_id: str, doc: dict[str, Any]) -> None:
@@ -165,9 +164,7 @@ class FakeSessionStore:
         return dict(doc) if doc else None
 
     async def list_sessions(self) -> list[dict[str, Any]]:
-        docs = sorted(
-            self._data.values(), key=lambda d: d.get("created_at", ""), reverse=True
-        )
+        docs = sorted(self._data.values(), key=lambda d: d.get("created_at", ""), reverse=True)
         return [dict(d) for d in docs]
 
     async def ping(self) -> bool:
@@ -191,18 +188,23 @@ def fake_store() -> FakeSessionStore:
 
 @pytest.fixture
 async def client(fake_store: FakeSessionStore) -> AsyncIterator[AsyncClient]:
-    with patch(
-        "freightcheck.services.session_store.get_mongo_session_store",
-        return_value=fake_store,
-    ), patch(
-        "freightcheck.api.audit.get_mongo_session_store",
-        return_value=fake_store,
-    ), patch(
-        "freightcheck.api.sessions.get_mongo_session_store",
-        return_value=fake_store,
-    ), patch(
-        "freightcheck.api.health.get_mongo_session_store",
-        return_value=fake_store,
+    with (
+        patch(
+            "freightcheck.services.session_store.get_mongo_session_store",
+            return_value=fake_store,
+        ),
+        patch(
+            "freightcheck.api.audit.get_mongo_session_store",
+            return_value=fake_store,
+        ),
+        patch(
+            "freightcheck.api.sessions.get_mongo_session_store",
+            return_value=fake_store,
+        ),
+        patch(
+            "freightcheck.api.health.get_mongo_session_store",
+            return_value=fake_store,
+        ),
     ):
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as c:
@@ -236,15 +238,11 @@ async def test_health_returns_ok(client: AsyncClient) -> None:
 # ---------------------------------------------------------------------------
 
 
-async def test_audit_happy_path(
-    client: AsyncClient, fake_store: FakeSessionStore
-) -> None:
+async def test_audit_happy_path(client: AsyncClient, fake_store: FakeSessionStore) -> None:
     session_id = await _upload_and_get_session_id(client)
 
     # Mock the agent so it doesn't actually run Gemini
-    with patch(
-        "freightcheck.api.audit._run_agent", new_callable=AsyncMock
-    ):
+    with patch("freightcheck.api.audit._run_agent", new_callable=AsyncMock):
         resp = await client.post("/audit", json={"session_id": session_id})
 
     assert resp.status_code == 201
@@ -261,9 +259,7 @@ async def test_audit_happy_path(
 
 
 async def test_audit_cache_miss_returns_400(client: AsyncClient) -> None:
-    resp = await client.post(
-        "/audit", json={"session_id": "nonexistent-session-id"}
-    )
+    resp = await client.post("/audit", json={"session_id": "nonexistent-session-id"})
     assert resp.status_code == 400
     body = resp.json()
     assert body["error"] == "SessionNotFoundError"
@@ -342,9 +338,7 @@ async def test_sessions_list_returns_seeded_sessions(
 # ---------------------------------------------------------------------------
 
 
-async def test_session_detail_found(
-    client: AsyncClient, fake_store: FakeSessionStore
-) -> None:
+async def test_session_detail_found(client: AsyncClient, fake_store: FakeSessionStore) -> None:
     doc = _sample_completed_session("detail-1")
     fake_store.seed(doc)
 
@@ -371,9 +365,7 @@ async def test_session_detail_not_found(client: AsyncClient) -> None:
 # ---------------------------------------------------------------------------
 
 
-async def test_trajectory_found(
-    client: AsyncClient, fake_store: FakeSessionStore
-) -> None:
+async def test_trajectory_found(client: AsyncClient, fake_store: FakeSessionStore) -> None:
     doc = _sample_completed_session("traj-1")
     fake_store.seed(doc)
 

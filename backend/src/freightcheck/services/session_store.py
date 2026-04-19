@@ -100,8 +100,12 @@ class MongoSessionStore:
                 },
                 upsert=True,
             )
-            log.info("mongo.write", session_id=session_id, collection="audit_sessions",
-                     operation="upsert_checkpoint")
+            log.info(
+                "mongo.write",
+                session_id=session_id,
+                collection="audit_sessions",
+                operation="upsert_checkpoint",
+            )
         except PyMongoError:
             log.exception("mongo.error", session_id=session_id, operation="upsert_checkpoint")
 
@@ -122,9 +126,7 @@ class MongoSessionStore:
         """Fetch a single session by `session_id`.  Returns ``None`` if absent."""
         await self._ensure_indexes_once()
         try:
-            doc = await self._sessions.find_one(
-                {"session_id": session_id}, {"_id": 0}
-            )
+            doc = await self._sessions.find_one({"session_id": session_id}, {"_id": 0})
             return dict(doc) if doc else None
         except PyMongoError as exc:
             log.exception("mongo.error", session_id=session_id, operation="get_session")

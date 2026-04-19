@@ -13,7 +13,7 @@ from tests.support import env_bootstrap
 
 def test_read_dotenv_value_parses_unquoted_key(tmp_path: Path) -> None:
     p = tmp_path / ".env"
-    p.write_text('GEMINI_API_KEY=secret-from-file\n', encoding="utf-8")
+    p.write_text("GEMINI_API_KEY=secret-from-file\n", encoding="utf-8")
     assert env_bootstrap.read_dotenv_value(p, "GEMINI_API_KEY") == "secret-from-file"
 
 
