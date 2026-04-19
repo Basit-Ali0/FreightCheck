@@ -72,9 +72,9 @@ export interface PackingListFields {
 }
 
 export interface Evidence {
-  doc_a: DocumentType;
+  doc_a: string;
   val_a: unknown;
-  doc_b: DocumentType;
+  doc_b: string;
   val_b: unknown;
 }
 
@@ -140,4 +140,31 @@ export interface SessionSummary {
 export interface SessionListResponse {
   sessions: SessionSummary[];
   total: number;
+}
+
+/** `POST /upload` */
+export interface UploadResponse {
+  session_id: string;
+  message: string;
+  documents_received: string[];
+  raw_text_lengths: Record<string, number>;
+}
+
+/** `POST /audit` */
+export interface AuditResponse {
+  session_id: string;
+  status: SessionStatus;
+  message: string;
+  created_at: string;
+}
+
+/** `GET /sessions/:id/trajectory` */
+export interface TrajectoryResponse {
+  session_id: string;
+  status: SessionStatus;
+  iteration_count: number;
+  planner_decisions: PlannerDecision[];
+  tool_calls: ToolCall[];
+  tokens_used: number;
+  elapsed_ms: number;
 }
