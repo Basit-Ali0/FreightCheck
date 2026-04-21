@@ -1,20 +1,9 @@
-"""Structured planner output from Gemini (LangGraph Flow Spec §2.2)."""
+"""Planner structured-output models (re-export from Gemini wire schemas)."""
 
-from typing import Any
+from freightcheck.schemas.gemini_outputs import (
+    PlannerLLMResponse,
+    PlannerToolInvocation,
+    planner_invocation_to_args,
+)
 
-from pydantic import BaseModel, Field
-
-
-class PlannerToolInvocation(BaseModel):
-    """Single tool call the planner wants queued for `execute_tool`."""
-
-    name: str
-    args: dict[str, Any] = Field(default_factory=dict)
-
-
-class PlannerLLMResponse(BaseModel):
-    """JSON schema for the planner Gemini call (`prompt_name=planner`)."""
-
-    chosen_tools: list[PlannerToolInvocation] = Field(default_factory=list)
-    rationale: str = ""
-    terminate: bool = False
+__all__ = ["PlannerLLMResponse", "PlannerToolInvocation", "planner_invocation_to_args"]

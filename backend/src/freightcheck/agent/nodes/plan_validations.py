@@ -16,7 +16,7 @@ from freightcheck.agent.state import AgentState
 from freightcheck.agent.tools import TOOL_REGISTRY, build_planner_gemini_tools
 from freightcheck.errors import PlannerError
 from freightcheck.schemas.agent import PlannerDecision, ToolCall
-from freightcheck.schemas.planner import PlannerLLMResponse
+from freightcheck.schemas.planner import PlannerLLMResponse, planner_invocation_to_args
 from freightcheck.services import gemini
 from freightcheck.settings import settings
 
@@ -133,7 +133,11 @@ async def plan_validations(state: AgentState) -> dict[str, Any]:
                     tool_call_id=str(uuid4()),
                     iteration=iteration_next,
                     tool_name=name,
-                    args=dict(inv.args),
+                    args={
+                        k: v
+                        for k, v in inv.model_dump(exclude_none=True).items()
+                        if k != "name"
+                    },
                     result=None,
                     started_at=t0syn,
                     completed_at=datetime.now(UTC),
@@ -143,7 +147,7 @@ async def plan_validations(state: AgentState) -> dict[str, Any]:
                 ).model_dump(mode="json"),
             )
             continue
-        plan_queue.append({"tool_name": name, "args": dict(inv.args)})
+        plan_queue.append({"tool_name": name, "args": planner_invocation_to_args(name, inv)})
 
     if not parsed.chosen_tools and not terminate:
         terminate = True

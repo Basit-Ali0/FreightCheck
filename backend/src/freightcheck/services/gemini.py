@@ -122,13 +122,23 @@ async def _raw_gemini_call(
 
     client = genai.Client(api_key=settings.GEMINI_API_KEY)
 
-    config = genai_types.GenerateContentConfig(
-        system_instruction=system_instruction,
-        response_mime_type="application/json",
-        response_schema=response_schema,
-        temperature=0.0,
-        tools=tools if tools else None,
-    )
+    # Gemini does not allow response_mime_type / response_schema together
+    # with function-calling tools.  When tools are present, omit the JSON
+    # response constraints and let call_gemini validate the schema after
+    # receiving the raw text.
+    if tools:
+        config = genai_types.GenerateContentConfig(
+            system_instruction=system_instruction,
+            temperature=0.0,
+            tools=tools,
+        )
+    else:
+        config = genai_types.GenerateContentConfig(
+            system_instruction=system_instruction,
+            response_mime_type="application/json",
+            response_schema=response_schema,
+            temperature=0.0,
+        )
 
     try:
         response = await client.aio.models.generate_content(
@@ -151,7 +161,31 @@ async def _raw_gemini_call(
 
     usage = getattr(response, "usage_metadata", None)
     tokens_used = int(getattr(usage, "total_token_count", 0) or 0)
-    text: str = response.text or "" if hasattr(response, "text") else ""
+
+    if tools and getattr(response, "function_calls", None):
+        import json  # noqa: PLC0415
+
+        chosen_tools = [
+            {"name": fc.name, **(fc.args or {})} for fc in (response.function_calls or [])
+        ]
+        parts = (
+            response.candidates[0].content.parts
+            if response.candidates and response.candidates[0].content
+            else []
+        )
+        rationale = "\n".join(
+            str(getattr(p, "text", "")) for p in (parts or []) if getattr(p, "text", None)
+        ).strip()
+        text = json.dumps(
+            {
+                "chosen_tools": chosen_tools,
+                "rationale": rationale,
+                "terminate": False,
+            }
+        )
+    else:
+        text = response.text or "" if hasattr(response, "text") else ""
+
     return text, tokens_used
 
 

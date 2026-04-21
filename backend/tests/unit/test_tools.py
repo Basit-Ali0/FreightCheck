@@ -8,6 +8,7 @@ occurs.
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import pytest
@@ -15,7 +16,7 @@ from langchain_core.tools import StructuredTool
 
 from freightcheck.agent import tools
 from freightcheck.agent.tools import (
-    ReExtractionResult,
+    FlagEvidenceWire,
     ToolContext,
     _SemanticResponse,
     check_container_consistency,
@@ -30,6 +31,7 @@ from freightcheck.agent.tools import (
 )
 from freightcheck.errors import ExtractionError, ToolArgsValidationError
 from freightcheck.schemas.audit import ExceptionSeverity, ValidationStatus
+from freightcheck.schemas.gemini_outputs import ReExtractStringResult
 from tests.fixtures.container_numbers import (
     INVALID_CHECK_DIGIT,
     INVALID_FORMAT,
@@ -214,8 +216,8 @@ async def test_validate_field_semantic_missing_field_short_circuits(
 
 
 async def test_re_extract_field_updates_state(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def fake_call_gemini(**_kw: Any) -> tuple[ReExtractionResult, int]:
-        return ReExtractionResult(value="CIF", confidence=0.95, rationale=None), 450
+    async def fake_call_gemini(**_kw: Any) -> tuple[ReExtractStringResult, int]:
+        return ReExtractStringResult(value="CIF", confidence=0.95, rationale=None), 450
 
     monkeypatch.setattr(tools.gemini, "call_gemini", fake_call_gemini)
 
@@ -245,7 +247,7 @@ async def test_re_extract_field_updates_state(monkeypatch: pytest.MonkeyPatch) -
 async def test_re_extract_field_propagates_extraction_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def fake_call_gemini(**_kw: Any) -> tuple[ReExtractionResult, int]:
+    async def fake_call_gemini(**_kw: Any) -> tuple[ReExtractStringResult, int]:
         raise ExtractionError("ExtractionError: schema failed")
 
     monkeypatch.setattr(tools.gemini, "call_gemini", fake_call_gemini)
@@ -260,6 +262,17 @@ async def test_re_extract_field_propagates_extraction_error(
 
     # Previous value must be preserved on failure.
     assert ctx.extracted_fields["bol"]["incoterm"] == "CIF"
+
+
+@pytest.mark.asyncio
+async def test_re_extract_field_rejects_line_items() -> None:
+    ctx = _make_ctx(
+        extracted={"invoice": {"line_items": []}},
+        confidence={"invoice": {"line_items": {"field": "line_items", "value": [], "confidence": 0.3}}},  # noqa: E501
+        raw={"invoice": "x"},
+    )
+    with pytest.raises(ToolArgsValidationError):
+        await re_extract_field(ctx, "invoice", "line_items", hint="nope")
 
 
 # ---- check_container_consistency ----------------------------------------
@@ -443,7 +456,12 @@ def test_flag_exception_appends_to_state() -> None:
         severity="critical",
         field="incoterm",
         description="Incoterm differs between BoL and Invoice",
-        evidence={"doc_a": "bol", "val_a": "CIF", "doc_b": "invoice", "val_b": "FOB"},
+        evidence=FlagEvidenceWire(
+            doc_a="bol",
+            doc_b="invoice",
+            val_a_json=json.dumps("CIF"),
+            val_b_json=json.dumps("FOB"),
+        ),
     )
     assert result["severity"] == "critical"
     assert len(ctx.exceptions) == 1
@@ -459,19 +477,12 @@ def test_flag_exception_invalid_severity_raises() -> None:
             severity="catastrophic",  # type: ignore[arg-type]
             field="x",
             description="y",
-            evidence={"doc_a": "bol", "val_a": 1, "doc_b": "invoice", "val_b": 2},
-        )
-
-
-def test_flag_exception_malformed_evidence_raises() -> None:
-    ctx = _make_ctx()
-    with pytest.raises(ToolArgsValidationError):
-        flag_exception(
-            ctx,
-            severity="warning",
-            field="x",
-            description="y",
-            evidence={"missing_required_keys": True},
+            evidence=FlagEvidenceWire(
+                doc_a="bol",
+                doc_b="invoice",
+                val_a_json=json.dumps(1),
+                val_b_json=json.dumps(2),
+            ),
         )
 
 

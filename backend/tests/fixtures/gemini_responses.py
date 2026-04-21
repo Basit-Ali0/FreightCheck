@@ -34,7 +34,7 @@ def good_reextraction_response(
     confidence: float = 0.95,
     rationale: str | None = None,
 ) -> str:
-    """Valid response matching the `ReExtractionResult` schema."""
+    """Valid response matching ``ReExtractStringResult`` (string field re-extraction)."""
     return json.dumps(
         {"value": value, "confidence": confidence, "rationale": rationale},
     )

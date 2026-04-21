@@ -12,10 +12,13 @@ import structlog
 from freightcheck.agent import prompts
 from freightcheck.agent.state import AgentState
 from freightcheck.errors import ExtractionError
-from freightcheck.schemas.documents import (
-    BolExtractionResponse,
-    InvoiceExtractionResponse,
-    PackingListExtractionResponse,
+from freightcheck.schemas.gemini_outputs import (
+    BolExtractionGeminiResponse,
+    InvoiceExtractionGeminiResponse,
+    PackingListExtractionGeminiResponse,
+    bol_confidences_to_state_map,
+    invoice_confidences_to_state_map,
+    packing_list_confidences_to_state_map,
 )
 from freightcheck.services import gemini
 
@@ -23,16 +26,6 @@ log = structlog.get_logger()
 
 # Data Models §1.2: confidence below this threshold flags `needs_human_review`.
 _LOW_CONFIDENCE_REVIEW_THRESHOLD = 0.5
-
-
-def _confidence_dict(conf: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    out: dict[str, dict[str, Any]] = {}
-    for field_name, c in conf.items():
-        if hasattr(c, "model_dump"):
-            out[field_name] = c.model_dump(mode="json")
-        elif isinstance(c, dict):
-            out[field_name] = dict(c)
-    return out
 
 
 async def extract_all(state: AgentState) -> dict[str, Any]:
@@ -43,7 +36,7 @@ async def extract_all(state: AgentState) -> dict[str, Any]:
     t0 = perf_counter()
     raw = state["raw_texts"]
 
-    async def bol() -> tuple[BolExtractionResponse, int]:
+    async def bol() -> tuple[BolExtractionGeminiResponse, int]:
         return await gemini.call_gemini(
             prompt_name="bol_extraction",
             prompt_template=prompts.BOL_EXTRACTION_PROMPT,
@@ -51,10 +44,10 @@ async def extract_all(state: AgentState) -> dict[str, Any]:
                 "isolation_clause": prompts.ISOLATION_CLAUSE,
                 "raw_text": raw.get("bol", ""),
             },
-            response_schema=BolExtractionResponse,
+            response_schema=BolExtractionGeminiResponse,
         )
 
-    async def inv() -> tuple[InvoiceExtractionResponse, int]:
+    async def inv() -> tuple[InvoiceExtractionGeminiResponse, int]:
         return await gemini.call_gemini(
             prompt_name="invoice_extraction",
             prompt_template=prompts.INVOICE_EXTRACTION_PROMPT,
@@ -62,10 +55,10 @@ async def extract_all(state: AgentState) -> dict[str, Any]:
                 "isolation_clause": prompts.ISOLATION_CLAUSE,
                 "raw_text": raw.get("invoice", ""),
             },
-            response_schema=InvoiceExtractionResponse,
+            response_schema=InvoiceExtractionGeminiResponse,
         )
 
-    async def pl() -> tuple[PackingListExtractionResponse, int]:
+    async def pl() -> tuple[PackingListExtractionGeminiResponse, int]:
         return await gemini.call_gemini(
             prompt_name="packing_list_extraction",
             prompt_template=prompts.PACKING_LIST_EXTRACTION_PROMPT,
@@ -73,7 +66,7 @@ async def extract_all(state: AgentState) -> dict[str, Any]:
                 "isolation_clause": prompts.ISOLATION_CLAUSE,
                 "raw_text": raw.get("packing_list", ""),
             },
-            response_schema=PackingListExtractionResponse,
+            response_schema=PackingListExtractionGeminiResponse,
         )
 
     try:
@@ -94,9 +87,9 @@ async def extract_all(state: AgentState) -> dict[str, Any]:
         "packing_list": pl_p.fields.model_dump(mode="json"),
     }
     extraction_confidence: dict[str, dict[str, dict[str, Any]]] = {
-        "bol": _confidence_dict(bol_p.confidences),
-        "invoice": _confidence_dict(inv_p.confidences),
-        "packing_list": _confidence_dict(pl_p.confidences),
+        "bol": bol_confidences_to_state_map(bol_p),
+        "invoice": invoice_confidences_to_state_map(inv_p),
+        "packing_list": packing_list_confidences_to_state_map(pl_p),
     }
 
     needs_human_review = False

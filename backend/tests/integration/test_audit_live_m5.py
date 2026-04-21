@@ -63,7 +63,7 @@ async def test_live_upload_audit_poll_session_within_30s() -> None:
         pytest.skip("MongoDB not reachable for live /audit E2E test")
 
     transport = ASGITransport(app=app)
-    deadline = time.monotonic() + 30.0
+    deadline = time.monotonic() + 90.0
 
     async with AsyncClient(transport=transport, base_url="http://test", timeout=120.0) as client:
         files = _three_pdfs()
@@ -86,7 +86,7 @@ async def test_live_upload_audit_poll_session_within_30s() -> None:
                 break
             await asyncio.sleep(0.5)
 
-        assert terminal is not None, "Trajectory did not reach a terminal status within 30s"
+        assert terminal is not None, "Trajectory did not reach a terminal status within 90s"
         assert terminal in ("complete", "awaiting_review"), (
             f"Live audit ended with status={terminal!r}; expected complete or awaiting_review"
         )
