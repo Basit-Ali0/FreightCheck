@@ -11,15 +11,19 @@ from pydantic import RootModel
 
 from freightcheck.agent.checkpointing import MongoMirroringSaver
 from freightcheck.agent.graph import build_graph, make_initial_state
-from freightcheck.schemas.documents import (
-    BolExtractionResponse,
-    BoLFields,
-    ExtractionConfidence,
-    InvoiceExtractionResponse,
-    InvoiceFields,
-    LineItem,
-    PackingListExtractionResponse,
-    PackingListFields,
+from freightcheck.schemas.documents import BoLFields, InvoiceFields, LineItem, PackingListFields
+from freightcheck.schemas.gemini_outputs import (
+    BoLExtractionConfidencesGemini,
+    BolExtractionGeminiResponse,
+    FloatFieldConfidence,
+    IntFieldConfidence,
+    InvoiceExtractionConfidencesGemini,
+    InvoiceExtractionGeminiResponse,
+    LineItemsAggregateConfidence,
+    PackingListExtractionConfidencesGemini,
+    PackingListExtractionGeminiResponse,
+    StrFieldConfidence,
+    StrListFieldConfidence,
 )
 from freightcheck.schemas.planner import PlannerLLMResponse as PlannerResp
 from freightcheck.schemas.planner import PlannerToolInvocation as PlannerInv
@@ -34,7 +38,11 @@ def _mock_mongo_session_store() -> Any:
     )
 
 
-def _high_conf_bol() -> BolExtractionResponse:
+def _sc(value: str) -> StrFieldConfidence:
+    return StrFieldConfidence(value=value, confidence=0.95)
+
+
+def _high_conf_bol() -> BolExtractionGeminiResponse:
     fields = BoLFields(
         bill_of_lading_number="BL1",
         shipper="S",
@@ -47,14 +55,25 @@ def _high_conf_bol() -> BolExtractionResponse:
         gross_weight=100.0,
         incoterm="FOB",
     )
-    conf = {
-        name: ExtractionConfidence(field=name, value=getattr(fields, name), confidence=0.95)
-        for name in BoLFields.model_fields
-    }
-    return BolExtractionResponse(fields=fields, confidences=conf)
+    conf = BoLExtractionConfidencesGemini(
+        bill_of_lading_number=_sc(fields.bill_of_lading_number),
+        shipper=_sc(fields.shipper),
+        consignee=_sc(fields.consignee),
+        vessel_name=_sc(fields.vessel_name),
+        port_of_loading=_sc(fields.port_of_loading),
+        port_of_discharge=_sc(fields.port_of_discharge),
+        container_numbers=StrListFieldConfidence(
+            value=fields.container_numbers,
+            confidence=0.95,
+        ),
+        description_of_goods=_sc(fields.description_of_goods),
+        gross_weight=FloatFieldConfidence(value=fields.gross_weight, confidence=0.95),
+        incoterm=_sc(fields.incoterm),
+    )
+    return BolExtractionGeminiResponse(fields=fields, confidences=conf)
 
 
-def _high_conf_invoice() -> InvoiceExtractionResponse:
+def _high_conf_invoice() -> InvoiceExtractionGeminiResponse:
     li = LineItem(description="x", quantity=1, unit_price=1.0)
     fields = InvoiceFields(
         invoice_number="INV1",
@@ -66,14 +85,20 @@ def _high_conf_invoice() -> InvoiceExtractionResponse:
         currency="USD",
         incoterm="FOB",
     )
-    conf = {
-        name: ExtractionConfidence(field=name, value=getattr(fields, name), confidence=0.95)
-        for name in InvoiceFields.model_fields
-    }
-    return InvoiceExtractionResponse(fields=fields, confidences=conf)
+    conf = InvoiceExtractionConfidencesGemini(
+        invoice_number=_sc(fields.invoice_number),
+        seller=_sc(fields.seller),
+        buyer=_sc(fields.buyer),
+        invoice_date=_sc(fields.invoice_date),
+        line_items=LineItemsAggregateConfidence(confidence=0.95),
+        total_value=FloatFieldConfidence(value=fields.total_value, confidence=0.95),
+        currency=_sc(fields.currency),
+        incoterm=_sc(fields.incoterm),
+    )
+    return InvoiceExtractionGeminiResponse(fields=fields, confidences=conf)
 
 
-def _high_conf_pl() -> PackingListExtractionResponse:
+def _high_conf_pl() -> PackingListExtractionGeminiResponse:
     li = LineItem(description="x", quantity=1, net_weight=100.0)
     fields = PackingListFields(
         total_packages=1,
@@ -81,22 +106,23 @@ def _high_conf_pl() -> PackingListExtractionResponse:
         container_numbers=["MSCU1234567"],
         line_items=[li],
     )
-    conf = {
-        name: ExtractionConfidence(field=name, value=getattr(fields, name), confidence=0.95)
-        for name in PackingListFields.model_fields
-    }
-    return PackingListExtractionResponse(fields=fields, confidences=conf)
-
-
-def _low_conf_bol() -> BolExtractionResponse:
-    r = _high_conf_bol()
-    r.confidences["gross_weight"] = ExtractionConfidence(
-        field="gross_weight",
-        value=100.0,
-        confidence=0.4,
-        rationale="uncertain",
+    conf = PackingListExtractionConfidencesGemini(
+        total_packages=IntFieldConfidence(value=fields.total_packages, confidence=0.95),
+        total_weight=FloatFieldConfidence(value=fields.total_weight, confidence=0.95),
+        container_numbers=StrListFieldConfidence(
+            value=fields.container_numbers,
+            confidence=0.95,
+        ),
+        line_items=LineItemsAggregateConfidence(confidence=0.95),
     )
-    return r
+    return PackingListExtractionGeminiResponse(fields=fields, confidences=conf)
+
+
+def _low_conf_bol() -> BolExtractionGeminiResponse:
+    r = _high_conf_bol()
+    gw = FloatFieldConfidence(value=r.fields.gross_weight, confidence=0.4, rationale="uncertain")
+    conf = r.confidences.model_copy(update={"gross_weight": gw})
+    return BolExtractionGeminiResponse(fields=r.fields, confidences=conf)
 
 
 @pytest.mark.asyncio
@@ -126,7 +152,7 @@ async def test_agent_graph_happy_path_terminates_under_two_seconds() -> None:
                 return (
                     PlannerResp(
                         chosen_tools=[
-                            PlannerInv(name="check_container_number_format", args={}),
+                            PlannerInv(name="check_container_number_format"),
                         ],
                         rationale="Run ISO check.",
                         terminate=False,
@@ -184,7 +210,9 @@ async def test_budget_max_iterations_runs_compile_report() -> None:
                     chosen_tools=[
                         PlannerInv(
                             name="validate_field_match",
-                            args={"field": "incoterm", "doc_a": "bol", "doc_b": "invoice"},
+                            field="incoterm",
+                            doc_a="bol",
+                            doc_b="invoice",
                         ),
                     ],
                     rationale="again",
@@ -263,7 +291,7 @@ async def test_injection_unknown_tool_recorded_not_executed() -> None:
         if prompt_name == "planner":
             return (
                 PlannerResp(
-                    chosen_tools=[PlannerInv(name="drop_database", args={})],
+                    chosen_tools=[PlannerInv(name="drop_database")],
                     rationale="evil",
                     terminate=False,
                 ),

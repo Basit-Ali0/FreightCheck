@@ -103,6 +103,16 @@ def create_app() -> FastAPI:
         )
         return _error_response(exc, status_code)
 
+    @app.get("/")
+    async def _root() -> dict[str, str]:
+        """Avoid a bare 404 when developers open the API host in a browser."""
+        return {
+            "service": "FreightCheck API",
+            "health": "/health",
+            "docs": "/docs",
+            "openapi": "/openapi.json",
+        }
+
     app.include_router(upload_router.router)
     app.include_router(audit_router.router)
     app.include_router(sessions_router.router)

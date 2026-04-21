@@ -7,6 +7,7 @@ import asyncio
 from datetime import UTC, datetime
 from typing import Any
 
+import certifi
 import structlog
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorCollection
 from pymongo.errors import DuplicateKeyError, PyMongoError
@@ -26,6 +27,7 @@ class MongoSessionStore:
         self._client: AsyncIOMotorClient[dict[str, Any]] = AsyncIOMotorClient(
             uri,
             serverSelectionTimeoutMS=3000,
+            tlsCAFile=certifi.where(),
         )
         self._sessions: AsyncIOMotorCollection[dict[str, Any]] = self._client[db_name][
             "audit_sessions"

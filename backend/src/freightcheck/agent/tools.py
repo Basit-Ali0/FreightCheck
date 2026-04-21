@@ -41,6 +41,11 @@ from freightcheck.schemas.audit import (
     ValidationResult,
     ValidationStatus,
 )
+from freightcheck.schemas.gemini_outputs import (
+    parse_wire_json_value,
+    re_extraction_parsed_to_entry,
+    re_extraction_response_schema,
+)
 from freightcheck.services import gemini
 
 DocType = Literal["bol", "invoice", "packing_list"]
@@ -569,14 +574,6 @@ async def validate_field_semantic(
 # ---- 3. re_extract_field ------------------------------------------------
 
 
-class ReExtractionResult(BaseModel):
-    """Schema for the RE_EXTRACTION_PROMPT structured response."""
-
-    value: Any = None
-    confidence: float
-    rationale: str | None = None
-
-
 async def re_extract_field(
     ctx: ToolContext,
     doc_type: DocType,
@@ -590,6 +587,11 @@ async def re_extract_field(
     extracted_fields and extraction_confidence on success.
     """
     _validate_doc_keys(doc_type)
+    if field == "line_items":
+        raise ToolArgsValidationError(
+            "ToolArgsValidationError: re_extract_field does not support line_items.",
+            field=field,
+        )
 
     raw_text = ctx.raw_texts.get(doc_type, "")
     prev_conf = ctx.extraction_confidence.get(doc_type, {}).get(field, {})
@@ -597,6 +599,7 @@ async def re_extract_field(
     previous_confidence = prev_conf.get("confidence", 0.0)
     previous_rationale = prev_conf.get("rationale", "")
 
+    schema = re_extraction_response_schema(field)
     parsed, tokens = await gemini.call_gemini(
         prompt_name="re_extraction",
         prompt_template=prompts.RE_EXTRACTION_PROMPT,
@@ -611,25 +614,27 @@ async def re_extract_field(
             "type_upper": doc_type.upper(),
             "raw_text": raw_text,
         },
-        response_schema=ReExtractionResult,
+        response_schema=schema,
     )
     ctx.tokens_used += tokens
 
+    value, confidence, rationale = re_extraction_parsed_to_entry(parsed)
+
     # On success, mutate extracted_fields + extraction_confidence.
-    ctx.extracted_fields.setdefault(doc_type, {})[field] = parsed.value
+    ctx.extracted_fields.setdefault(doc_type, {})[field] = value
     ctx.extraction_confidence.setdefault(doc_type, {})[field] = {
         "field": field,
-        "value": parsed.value,
-        "confidence": parsed.confidence,
-        "rationale": parsed.rationale,
+        "value": value,
+        "confidence": confidence,
+        "rationale": rationale,
     }
 
     return {
         "doc_type": doc_type,
         "field": field,
-        "value": parsed.value,
-        "confidence": parsed.confidence,
-        "rationale": parsed.rationale,
+        "value": value,
+        "confidence": confidence,
+        "rationale": rationale,
     }
 
 
@@ -978,12 +983,21 @@ def check_container_number_format(ctx: ToolContext) -> dict[str, Any]:
 # ---- 7. flag_exception --------------------------------------------------
 
 
+class FlagEvidenceWire(BaseModel):
+    """Structured evidence for ``flag_exception`` (Gemini-safe wire shape)."""
+
+    doc_a: str
+    doc_b: str
+    val_a_json: str
+    val_b_json: str
+
+
 def flag_exception(
     ctx: ToolContext,
     severity: Literal["info", "warning", "critical"],
     field: str,
     description: str,
-    evidence: dict[str, Any],
+    evidence: FlagEvidenceWire,
 ) -> dict[str, Any]:
     """
     Record an exception. Only call this when a validation tool didn't
@@ -1000,7 +1014,12 @@ def flag_exception(
         ) from exc
 
     try:
-        evidence_model = Evidence(**evidence)
+        evidence_model = Evidence(
+            doc_a=evidence.doc_a,
+            doc_b=evidence.doc_b,
+            val_a=parse_wire_json_value(evidence.val_a_json),
+            val_b=parse_wire_json_value(evidence.val_b_json),
+        )
     except (TypeError, ValueError) as exc:
         raise ToolArgsValidationError(
             f"ToolArgsValidationError: evidence shape invalid: {exc}",
@@ -1074,7 +1093,7 @@ class FlagExceptionArgs(BaseModel):
     severity: Literal["info", "warning", "critical"]
     field: str
     description: str
-    evidence: dict[str, Any]
+    evidence: FlagEvidenceWire
 
 
 class EscalateArgs(BaseModel):

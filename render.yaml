@@ -1,0 +1,30 @@
+# Render Blueprint — FreightCheck FastAPI backend (Milestone 8).
+# After connecting the repo, set secret env vars in the Render dashboard
+# (never commit real values). See README.md § Deployment.
+
+services:
+  - type: web
+    name: freightcheck-api
+    runtime: python
+    rootDir: backend
+    plan: free
+    region: oregon
+    branch: main
+    healthCheckPath: /health
+    # Astral uv. For stricter lockfile parity with CI, use: uv sync --frozen --no-dev
+    buildCommand: pip install uv && uv sync --no-dev
+    startCommand: uv run uvicorn freightcheck.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      - key: LOG_FORMAT
+        value: json
+      - key: LOG_LEVEL
+        value: INFO
+      - key: MONGODB_URI
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      # Comma-separated origins, e.g. https://your-app.vercel.app (no trailing slash)
+      - key: ALLOWED_ORIGINS
+        sync: false
