@@ -122,7 +122,9 @@ def _random_truth(seed: int) -> ShipmentTruth:
         qty = rng.randint(5, 500)
         unit = round(rng.uniform(1.5, 99.99), 2)
         net = round(rng.uniform(10.0, 5000.0), 2)
-        items.append(LineItemTruth(description=desc, quantity=qty, unit_price=unit, net_weight_kg=net))  # noqa: E501
+        items.append(
+            LineItemTruth(description=desc, quantity=qty, unit_price=unit, net_weight_kg=net)
+        )  # noqa: E501
     total_qty = sum(li.quantity for li in items)
     total_value = round(sum(li.quantity * li.unit_price for li in items), 2)
     total_packages = max(1, total_qty // rng.randint(2, 8))
@@ -172,7 +174,9 @@ def truth_with_line_items(seed: int, count: int) -> ShipmentTruth:
         qty = 10 + (i % 7)
         unit = round(5.0 + (i % 50) * 1.11, 2)
         net = round(50.0 + i * 3.7, 2)
-        items.append(LineItemTruth(description=desc, quantity=qty, unit_price=unit, net_weight_kg=net))  # noqa: E501
+        items.append(
+            LineItemTruth(description=desc, quantity=qty, unit_price=unit, net_weight_kg=net)
+        )  # noqa: E501
     total_qty = sum(li.quantity for li in items)
     total_value = round(sum(li.quantity * li.unit_price for li in items), 2)
     total_packages = max(1, total_qty // 5)
@@ -290,7 +294,9 @@ def _render_canvas(lines: list[str], seed: int) -> bytes:  # noqa: ARG001
     return pin_pdf_metadata(raw)
 
 
-def _lines_from_doc(title: str, fields: dict[str, Any], rng: Random, low_quality: bool) -> list[str]:  # noqa: E501
+def _lines_from_doc(
+    title: str, fields: dict[str, Any], rng: Random, low_quality: bool
+) -> list[str]:  # noqa: E501
     lines = [title, "===", ""]
     for key in sorted(fields.keys()):
         val = fields[key]

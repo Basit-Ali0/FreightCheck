@@ -53,7 +53,9 @@ def values_equal(truth: Any, extracted: Any) -> bool:  # noqa: PLR0911, PLR0912
         if len(truth) != len(extracted):
             return False
         if truth and isinstance(truth[0], str):
-            return {normalize_string(x) for x in truth} == {normalize_string(str(x)) for x in extracted}  # noqa: E501
+            return {normalize_string(x) for x in truth} == {
+                normalize_string(str(x)) for x in extracted
+            }  # noqa: E501
         return all(values_equal(t, e) for t, e in zip(truth, extracted, strict=True))
     if isinstance(truth, dict) and isinstance(extracted, dict):
         if set(truth.keys()) != set(extracted.keys()):
@@ -84,7 +86,11 @@ def truth_to_extracted_shape(truth: Any) -> dict[str, Any]:
         "incoterm": d["incoterm"],
     }
     invoice_li = [
-        {"description": li["description"], "quantity": li["quantity"], "unit_price": li["unit_price"]}  # noqa: E501
+        {
+            "description": li["description"],
+            "quantity": li["quantity"],
+            "unit_price": li["unit_price"],
+        }  # noqa: E501
         for li in d["line_items"]
     ]
     pl_li = [
@@ -226,8 +232,7 @@ def extraction_is_grounded(doc: str, field_path: str, value: Any, raw_text: str)
             )
     if isinstance(value, dict):
         return all(
-            extraction_is_grounded(doc, f"{field_path}.{k}", v, raw_text)
-            for k, v in value.items()
+            extraction_is_grounded(doc, f"{field_path}.{k}", v, raw_text) for k, v in value.items()
         )
     return False
 

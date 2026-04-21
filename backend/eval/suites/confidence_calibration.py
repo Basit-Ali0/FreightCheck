@@ -84,11 +84,17 @@ class ConfidenceCalibrationSuite(EvalSuite):
             try:
                 pack = await run_extract_all_for_tagged(tagged, ctx=ctx, snapshot_suite="")
             except Exception as exc:
-                per.append(ScenarioResult(scenario_id=tagged.scenario_id, details={"error": str(exc)}))  # noqa: E501
+                per.append(
+                    ScenarioResult(scenario_id=tagged.scenario_id, details={"error": str(exc)})
+                )  # noqa: E501
                 continue
             ext_out = pack["extract"]
             if ext_out.get("error"):
-                per.append(ScenarioResult(scenario_id=tagged.scenario_id, details={"error": ext_out["error"]}))  # noqa: E501
+                per.append(
+                    ScenarioResult(
+                        scenario_id=tagged.scenario_id, details={"error": ext_out["error"]}
+                    )
+                )  # noqa: E501
                 continue
             extracted = ext_out.get("extracted_fields", {})
             conf = ext_out.get("extraction_confidence", {})
@@ -115,13 +121,9 @@ class ConfidenceCalibrationSuite(EvalSuite):
             per.append(ScenarioResult(scenario_id=tagged.scenario_id))
 
         ece = _ece(all_pairs)
-        acc_high = (
-            sum(1 for _, o in high_pairs if o) / len(high_pairs) if high_pairs else 1.0
-        )
+        acc_high = sum(1 for _, o in high_pairs if o) / len(high_pairs) if high_pairs else 1.0
         acc_low = sum(1 for _, o in low_pairs if o) / len(low_pairs) if low_pairs else 0.0
-        high_rate = (
-            consistent_high_num / consistent_field_num if consistent_field_num else 0.0
-        )
+        high_rate = consistent_high_num / consistent_field_num if consistent_field_num else 0.0
         metrics = {
             "ece": ece,
             "accuracy_at_high_confidence": acc_high,

@@ -85,7 +85,9 @@ def classify_termination(final: AgentState) -> str:
     return "planner_decision"
 
 
-async def run_agent_session(session_id: str, raw_texts: dict[str, str]) -> tuple[AgentState, dict[str, float]]:  # noqa: E501
+async def run_agent_session(
+    session_id: str, raw_texts: dict[str, str]
+) -> tuple[AgentState, dict[str, float]]:  # noqa: E501
     """Run the full graph with Mongo mirror disabled; return final state and phase timings (ms)."""
     phase_ms: dict[str, float] = {}
     state = make_initial_state(session_id, raw_texts)

@@ -34,7 +34,9 @@ class CostSuite(EvalSuite):
                 raw_texts = await raw_texts_from_tagged(tagged)
                 final, _ = await run_agent_session(tagged.scenario_id, raw_texts)
             except Exception as exc:
-                per.append(ScenarioResult(scenario_id=tagged.scenario_id, details={"error": str(exc)}))  # noqa: E501
+                per.append(
+                    ScenarioResult(scenario_id=tagged.scenario_id, details={"error": str(exc)})
+                )  # noqa: E501
                 continue
             t = float(final.get("tokens_used", 0))
             tokens.append(t)

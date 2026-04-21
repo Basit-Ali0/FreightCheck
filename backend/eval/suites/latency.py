@@ -35,7 +35,9 @@ class LatencySuite(EvalSuite):
                 raw_texts = await raw_texts_from_tagged(tagged)
                 final, phase = await run_agent_session(tagged.scenario_id, raw_texts)
             except Exception as exc:
-                per.append(ScenarioResult(scenario_id=tagged.scenario_id, details={"error": str(exc)}))  # noqa: E501
+                per.append(
+                    ScenarioResult(scenario_id=tagged.scenario_id, details={"error": str(exc)})
+                )  # noqa: E501
                 continue
             totals.append(float(final.get("elapsed_ms", 0)))
             extract_ms.append(phase.get("extract_all", 0.0))

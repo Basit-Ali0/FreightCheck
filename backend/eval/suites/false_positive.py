@@ -35,11 +35,15 @@ class FalsePositiveSuite(EvalSuite):
                 raw_texts = await raw_texts_from_tagged(tagged)
                 final, _ = await run_agent_session(tagged.scenario_id, raw_texts)
             except Exception as exc:
-                per.append(ScenarioResult(scenario_id=tagged.scenario_id, details={"error": str(exc)}))  # noqa: E501
+                per.append(
+                    ScenarioResult(scenario_id=tagged.scenario_id, details={"error": str(exc)})
+                )  # noqa: E501
                 continue
             report = final.get("report") or {}
             exceptions = list(report.get("exceptions") or [])
-            bad = any(str(e.get("severity", "")).lower() in ("critical", "warning") for e in exceptions)  # noqa: E501
+            bad = any(
+                str(e.get("severity", "")).lower() in ("critical", "warning") for e in exceptions
+            )  # noqa: E501
             crit = any(str(e.get("severity", "")).lower() == "critical" for e in exceptions)
             if bad:
                 fp += 1
@@ -53,9 +57,10 @@ class FalsePositiveSuite(EvalSuite):
             "critical_false_positive_rate": cfp / denom,
         }
         thr = self.thresholds()
-        passed = metrics["false_positive_rate"] <= thr["false_positive_rate"] and metrics[
-            "critical_false_positive_rate"
-        ] <= thr["critical_false_positive_rate"]
+        passed = (
+            metrics["false_positive_rate"] <= thr["false_positive_rate"]
+            and metrics["critical_false_positive_rate"] <= thr["critical_false_positive_rate"]
+        )
         completed = utc_now_iso()
         return SuiteResult(
             suite=self.name,

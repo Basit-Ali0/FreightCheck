@@ -154,7 +154,9 @@ def incoterm_port_contradiction(seed: int) -> ShipmentScenario:
 
 
 def low_quality_pdf(seed: int) -> ShipmentScenario:
-    return ShipmentScenario(truth=_random_truth(seed), low_quality=True, scenario_kind="low_quality_pdf")  # noqa: E501
+    return ShipmentScenario(
+        truth=_random_truth(seed), low_quality=True, scenario_kind="low_quality_pdf"
+    )  # noqa: E501
 
 
 def description_semantic_match(seed: int) -> ShipmentScenario:

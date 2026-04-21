@@ -39,11 +39,17 @@ class GroundingSuite(EvalSuite):
                 )
                 raw_texts = pack["raw_texts"]
             except Exception as exc:
-                per.append(ScenarioResult(scenario_id=tagged.scenario_id, details={"error": str(exc)}))  # noqa: E501
+                per.append(
+                    ScenarioResult(scenario_id=tagged.scenario_id, details={"error": str(exc)})
+                )  # noqa: E501
                 continue
             ext_out = pack["extract"]
             if ext_out.get("error"):
-                per.append(ScenarioResult(scenario_id=tagged.scenario_id, details={"error": ext_out["error"]}))  # noqa: E501
+                per.append(
+                    ScenarioResult(
+                        scenario_id=tagged.scenario_id, details={"error": ext_out["error"]}
+                    )
+                )  # noqa: E501
                 continue
             extracted = ext_out.get("extracted_fields", {})
             for doc, blob in extracted.items():

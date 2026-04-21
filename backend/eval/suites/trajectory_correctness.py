@@ -41,7 +41,9 @@ class TrajectoryCorrectnessSuite(EvalSuite):
                 raw_texts = await raw_texts_from_tagged(tagged)
                 final, _ = await run_agent_session(tagged.scenario_id, raw_texts)
             except Exception as exc:
-                per.append(ScenarioResult(scenario_id=tagged.scenario_id, details={"error": str(exc)}))  # noqa: E501
+                per.append(
+                    ScenarioResult(scenario_id=tagged.scenario_id, details={"error": str(exc)})
+                )  # noqa: E501
                 continue
             calls = final.get("tool_calls") or []
             tools = [str(c.get("tool_name", "")) for c in calls if c.get("tool_name")]
@@ -55,13 +57,17 @@ class TrajectoryCorrectnessSuite(EvalSuite):
             unexpected_rates.append(ur)
             iters.append(ic)
             term_counter[classify_termination(final)] += 1
-            per.append(ScenarioResult(scenario_id=tagged.scenario_id, details={"tools": tools[:40]}))  # noqa: E501
+            per.append(
+                ScenarioResult(scenario_id=tagged.scenario_id, details={"tools": tools[:40]})
+            )  # noqa: E501
 
         n = max(len(dataset), 1)  # noqa: F841
         term_total = sum(term_counter.values()) or 1
         metrics = {
             "expected_tool_coverage": sum(coverages) / len(coverages) if coverages else 0.0,
-            "unexpected_tool_rate": sum(unexpected_rates) / len(unexpected_rates) if unexpected_rates else 0.0,  # noqa: E501
+            "unexpected_tool_rate": sum(unexpected_rates) / len(unexpected_rates)
+            if unexpected_rates
+            else 0.0,  # noqa: E501
             "median_iterations": percentile(iters, 0.5),
             "p95_iterations": percentile(iters, 0.95),
             "termination_iteration_cap_rate": term_counter["iteration_cap"] / term_total,

@@ -84,7 +84,9 @@ def regressions_section(
         delta = float(obs) - float(prev)
         if abs(delta) >= 0.02:  # noqa: PLR2004
             found = True
-            lines.append(f"- **{name}**: key metric moved by {delta:+.4f} (was {prev:.4f}, now {obs:.4f})")  # noqa: E501
+            lines.append(
+                f"- **{name}**: key metric moved by {delta:+.4f} (was {prev:.4f}, now {obs:.4f})"
+            )  # noqa: E501
     if not found:
         lines.append("_(No metric shifted by ≥ 2% vs baseline.)_")
     lines.append("")
@@ -131,8 +133,7 @@ def write_summary(
         f"**Overall**: {'PASS' if overall else 'FAIL'}",
         f"**Git SHA**: `{git_sha}`",
         "",
-        "**Prompt versions**: "
-        + ", ".join(f"{k} {v}" for k, v in sorted(prompt_versions.items())),
+        "**Prompt versions**: " + ", ".join(f"{k} {v}" for k, v in sorted(prompt_versions.items())),
         "",
         "## Suite Results",
         "",
@@ -154,6 +155,8 @@ def write_summary(
         table.append("_(none)_")
     else:
         for r in fails:
-            table.append(f"- **{r.suite}** missed thresholds on: " + ", ".join(sorted(r.thresholds.keys())))  # noqa: E501
+            table.append(
+                f"- **{r.suite}** missed thresholds on: " + ", ".join(sorted(r.thresholds.keys()))
+            )  # noqa: E501
     table.append("")
     (output_dir / "summary.md").write_text("\n".join(table), encoding="utf-8")

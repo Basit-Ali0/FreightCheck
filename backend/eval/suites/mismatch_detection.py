@@ -48,7 +48,9 @@ class MismatchDetectionSuite(EvalSuite):
                 raw_texts = await raw_texts_from_tagged(tagged)
                 final, _phase = await run_agent_session(tagged.scenario_id, raw_texts)
             except Exception as exc:
-                per.append(ScenarioResult(scenario_id=tagged.scenario_id, details={"error": str(exc)}))  # noqa: E501
+                per.append(
+                    ScenarioResult(scenario_id=tagged.scenario_id, details={"error": str(exc)})
+                )  # noqa: E501
                 continue
             report = final.get("report") or {}
             exceptions = list(report.get("exceptions") or [])
@@ -73,20 +75,22 @@ class MismatchDetectionSuite(EvalSuite):
             metrics[f"recall_{k}"] = kind_hits[k] / tot if tot else 0.0
 
         thr = self.thresholds()
-        passed = metrics["overall_recall"] >= thr["overall_recall"] and metrics[
-            "correct_severity_rate"
-        ] >= thr["correct_severity_rate"] and all(
-            metrics.get(f"recall_{k}", 1.0) >= thr[f"recall_{k}"]
-            for k in [
-                "incoterm_conflict",
-                "quantity_mismatch",
-                "weight_mismatch_outside_tolerance",
-                "container_number_mismatch",
-                "invalid_container_check_digit",
-                "incoterm_port_contradiction",
-                "description_semantic_mismatch",
-                "duplicate_line_items",
-            ]
+        passed = (
+            metrics["overall_recall"] >= thr["overall_recall"]
+            and metrics["correct_severity_rate"] >= thr["correct_severity_rate"]
+            and all(
+                metrics.get(f"recall_{k}", 1.0) >= thr[f"recall_{k}"]
+                for k in [
+                    "incoterm_conflict",
+                    "quantity_mismatch",
+                    "weight_mismatch_outside_tolerance",
+                    "container_number_mismatch",
+                    "invalid_container_check_digit",
+                    "incoterm_port_contradiction",
+                    "description_semantic_mismatch",
+                    "duplicate_line_items",
+                ]
+            )
         )
         completed = utc_now_iso()
         return SuiteResult(

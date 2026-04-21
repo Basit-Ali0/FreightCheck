@@ -268,7 +268,9 @@ async def test_re_extract_field_propagates_extraction_error(
 async def test_re_extract_field_rejects_line_items() -> None:
     ctx = _make_ctx(
         extracted={"invoice": {"line_items": []}},
-        confidence={"invoice": {"line_items": {"field": "line_items", "value": [], "confidence": 0.3}}},  # noqa: E501
+        confidence={
+            "invoice": {"line_items": {"field": "line_items", "value": [], "confidence": 0.3}}
+        },  # noqa: E501
         raw={"invoice": "x"},
     )
     with pytest.raises(ToolArgsValidationError):

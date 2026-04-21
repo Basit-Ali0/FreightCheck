@@ -134,9 +134,7 @@ async def plan_validations(state: AgentState) -> dict[str, Any]:
                     iteration=iteration_next,
                     tool_name=name,
                     args={
-                        k: v
-                        for k, v in inv.model_dump(exclude_none=True).items()
-                        if k != "name"
+                        k: v for k, v in inv.model_dump(exclude_none=True).items() if k != "name"
                     },
                     result=None,
                     started_at=t0syn,
