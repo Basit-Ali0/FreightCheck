@@ -17,7 +17,7 @@ def make_scenario_1_weight_container(seed: int) -> dict[str, bytes]:
     # Intentionally modify the PL overrides to create exceptions
     pl_overrides = {
         "total_weight": truth.gross_weight_kg - 500.0, # 500 kg off
-        "container_numbers": list(truth.container_numbers) + ["MSKU9999999"] # noqa: RUF005, E501
+        "container_numbers": list(truth.container_numbers) + ["MSKU9999999"]  # noqa: RUF005
     }
     
     scenario = ShipmentScenario(
